@@ -6,7 +6,7 @@ export function InputsPanel({ inputs, result, note }: { inputs: Inputs; result: 
   const flagged = new Set(
     (result?.findings ?? []).filter((f) => f.result === "EXCEPTION").map((f) => f.field.replace(/^evidence\./, "")),
   );
-  const requested = new Set(request.requested_changes.map((c) => c.field));
+  const requested = new Set((request.requested_changes ?? []).map((c) => c.field));
   return (
     <div className="card">
       <div className="card-h">
@@ -25,7 +25,7 @@ export function InputsPanel({ inputs, result, note }: { inputs: Inputs; result: 
           <table className="mini">
             <thead><tr><th>Field</th><th>Requested value</th></tr></thead>
             <tbody>
-              {request.requested_changes.map((c) => (
+              {(request.requested_changes ?? []).map((c) => (
                 <tr key={c.field} className={flagged.has(c.field) ? "flag" : ""}>
                   <td className="mono">{c.field}</td><td className="mono">{shown(c.requested_value)}</td>
                 </tr>
@@ -35,7 +35,7 @@ export function InputsPanel({ inputs, result, note }: { inputs: Inputs; result: 
           <div className="small muted" style={{ marginTop: 10 }}>Evidence indicators <SimTag>DMS · SIMULATED</SimTag></div>
           <div className="ev">
             {Object.keys(request.evidence).length === 0 && <span className="chip chip-exception">none on file</span>}
-            {Object.entries(request.evidence).map(([k, v]) => (
+            {Object.entries(request.evidence ?? {}).map(([k, v]) => (
               <span key={k} className={`chip ${v ? "chip-pass" : "chip-neutral"}`}>{k}: {v ? "present" : "not provided"}</span>
             ))}
           </div>
@@ -50,7 +50,7 @@ export function InputsPanel({ inputs, result, note }: { inputs: Inputs; result: 
           <table className="mini">
             <thead><tr><th>TNAL row</th><th>Field</th><th>Old → New</th></tr></thead>
             <tbody>
-              {change.tnal_entries.map((t) => (
+              {(change.tnal_entries ?? []).map((t) => (
                 <tr key={t.record_id} className={flagged.has(t.field) ? "flag" : ""}>
                   <td className="mono nw">{t.record_id}</td>
                   <td className="mono">
@@ -64,7 +64,7 @@ export function InputsPanel({ inputs, result, note }: { inputs: Inputs; result: 
           </table>
           <div className="small muted" style={{ marginTop: 10 }}>
             GPS change report lists {change.gps_changes.length} field{change.gps_changes.length === 1 ? "" : "s"}: {" "}
-            <span className="mono">{change.gps_changes.map((g) => g.field).join(", ") || "none"}</span>
+            <span className="mono">{(change.gps_changes ?? []).map((g) => g.field).join(", ") || "none"}</span>
           </div>
         </section>
       </div>

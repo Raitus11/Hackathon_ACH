@@ -289,3 +289,112 @@ export interface UsagePayload {
   };
   records: UsageRecord[];
 }
+
+export interface ConfigOption {
+  key: string;
+  kind: "ACTIVE" | "SAMPLE" | "SNAPSHOT" | "UNKNOWN";
+  label: string;
+  version?: string;
+  sha256?: string;
+  short_hash?: string;
+  valid: boolean;
+  error?: string;
+}
+
+export type ReplayChange = "NEW_EXCEPTION" | "RESOLVED" | "CHECK_ADDED" | "CHECK_REMOVED" | "UNCHANGED";
+
+export interface ReplayFinding {
+  rule_id: string;
+  field: string;
+  field_label: string;
+  baseline_result: "MATCH" | "EXCEPTION" | "NOT_CHECKED";
+  candidate_result: "MATCH" | "EXCEPTION" | "NOT_CHECKED";
+  baseline_rule_version: number | null;
+  candidate_rule_version: number | null;
+  expected_value: string | null;
+  actual_value: string | null;
+  baseline_reason: string | null;
+  candidate_reason: string | null;
+  change: ReplayChange;
+}
+
+export interface ReplayResultSummary {
+  overall: Outcome;
+  exception_count: number;
+  match_count: number;
+  findings_digest: string;
+  exception_rules: string[];
+}
+
+export interface Comparison {
+  request_id: string;
+  change_id: string;
+  input_digest: string;
+  baseline: ConfigOption;
+  candidate: ConfigOption;
+  baseline_result: ReplayResultSummary;
+  candidate_result: ReplayResultSummary;
+  outcome_changed: boolean;
+  changed_findings: number;
+  findings: ReplayFinding[];
+  rule_diffs: { rule_id: string; change: "ADDED" | "REMOVED" | "MODIFIED"; attributes: { name: string; before: unknown; after: unknown }[] }[];
+  notice: string;
+}
+
+export interface QueueItem {
+  queue_item_id: string;
+  routed_at: string;
+  run_id: string;
+  request_id: string;
+  change_id: string;
+  customer_id: string;
+  customer_name: string;
+  engine_outcome: Outcome;
+  routed_to: string;
+  routed_to_role: string;
+  routed_by: string;
+  routed_by_name: string;
+  decision_id: string;
+  checker_comment: string;
+  exceptions: { rule_id: string; rule_version: number; field: string; field_label: string; exception_type: string | null;
+    expected: string; actual: string; reason: string }[];
+  status: string;
+  simulated: boolean;
+  config_version_hash: string;
+}
+
+export interface SuiteRow {
+  scenario_id: string;
+  name: string;
+  seeded_condition: string;
+  organizer_expected_outcome: string;
+  expected_overall: Outcome;
+  actual_overall: Outcome;
+  expected_exceptions: string[][];
+  actual_exceptions: string[][];
+  status: "PASS" | "FAIL";
+  findings_digest: string;
+  exception_details: { field: string; expected: string; actual: string; rule: string }[];
+  expectation_baseline: string | null;
+}
+
+export interface SuitePayload {
+  generated_at: string;
+  config: { file: string; version: string; short_hash: string };
+  summary: { total: number; passed: number };
+  scenarios: SuiteRow[];
+  notice: string;
+}
+
+export interface Metrics {
+  runs: number;
+  pass: number;
+  exception: number;
+  exceptions_by_rule: Record<string, number>;
+  decisions: { APPROVE: number; INVESTIGATE: number };
+  blocked_attempts: number;
+  self_approval_blocked: number;
+  routed_to_queue: number;
+  avg_run_ms: number | null;
+  note: string;
+}

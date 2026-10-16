@@ -18,6 +18,11 @@ flowchart LR
     N["Canonical ACH maintenance model<br/>MaintenanceCase + input digest"]
   end
 
+  subgraph AI["AI-ASSISTED · advisory only"]
+    DOC["Authorization form (synthetic .txt)"]
+    DX["Document Extraction Agent · llm/service.py<br/>LLM: mock (SIMULATED) or LLM gateway<br/>fields + confidence + cross-check<br/>prompt cache + local response cache<br/>token ledger"]
+  end
+
   subgraph CS["CONTROL SERVICES"]
     CFG[("External rule file<br/>config/rules/ach_db_next_day.yaml<br/>safe YAML · schema-validated · sha256<br/>re-read every run")]
     ENG["Validation engine · engine.py<br/>request_approved · required · equality<br/>authorized_scope · source_consistency · evidence_present"]
@@ -27,28 +32,40 @@ flowchart LR
   subgraph RES["RESULTS & EVIDENCE"]
     VR["ValidationResult (immutable)<br/>PASS / EXCEPTION · field findings<br/>rule id + version · config sha256<br/>NO approval field"]
     EP["Evidence pack export<br/>.md / .json"]
+    RP["Rule version comparison · replay.py<br/>same inputs under two configs<br/>(active · sample · run snapshot)"]
   end
 
   subgraph HUM["CHECKER EXPERIENCE · human-approval boundary"]
     UI["Exception-first review (React)<br/>expected vs actual · rule · reason · source"]
     D["Decision: Approve / Investigate<br/>+ mandatory comment<br/>DecisionRecord (separate, write-once)"]
+    MF["Maker feedback (read-only)<br/>what differs from the approved request"]
   end
+
+  Q["Exception queue · exqueue.py<br/>CheckMate routing (SIMULATED)<br/>Investigate → original processor"]
 
   subgraph X["CROSS-CUTTING"]
     SOD["RBAC + SoD · sod.py<br/>maker self-approval blocked in API (403)"]
     AUD["Append-only audit log<br/>runtime/audit.jsonl"]
     LOG["Structured JSON logs<br/>correlation + run IDs"]
-    TST["Test harness · pytest<br/>5-scenario report"]
+    TST["Test harness · pytest<br/>5-scenario report + live suite"]
+    MET["Prototype metrics<br/>derived from the audit log"]
   end
 
   R --> V
   C --> V
   E --> V
   V --> M --> N --> ENG
+  DOC --> DX
+  N -.->|request values for cross-check| DX
+  DX -->|advisory, checker must confirm| UI
   CFG --> ENG
   ENG --> EXP --> VR
   VR --> UI --> D
   VR --> EP
+  CFG --> RP
+  N --> RP
+  VR --> MF
+  D -->|Investigate| Q
   D -.->|enforced by| SOD
   VR -.-> AUD
   D -.-> AUD
@@ -56,12 +73,16 @@ flowchart LR
   classDef human fill:#fff6d6,stroke:#ffcd41,stroke-width:3px,color:#2b2b2b;
   classDef sim fill:#eef3fa,stroke:#1d4f91,stroke-dasharray:4 3,color:#2b2b2b;
   class HUM,UI,D human;
-  class R,C,E sim;
+  class R,C,E,Q sim;
+  classDef ai fill:#f1edfb,stroke:#4f2fb0,color:#2b2b2b;
+  class AI,DOC,DX ai;
 ```
 
 **Human-approval boundary.** Everything left of the checker experience is automated comparison. The engine result type
 (`ValidationResult`) has no approval field. The only object that can carry Approve is `DecisionRecord`, which the API
 creates only for a CHECKER persona who did not implement the change.
+
+The Rule Engine has no edge from the Document Extraction Agent: AI output reaches only the checker's screen.
 
 ## 2. Where the prototype sits in C-247489
 

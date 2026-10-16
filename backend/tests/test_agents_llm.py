@@ -121,11 +121,11 @@ def test_openai_compatible_usage_parsing_with_cached_tokens(monkeypatch, scenari
                                                      "confidence": 0.98}],
                               "signature_present": {"value": True, "confidence": 0.97}})
         return httpx.Response(200, json={
-            "model": "gpt-4o-apex", "choices": [{"message": {"content": content}}],
+            "model": "gpt-4o-gw", "choices": [{"message": {"content": content}}],
             "usage": {"prompt_tokens": 1500, "completion_tokens": 120, "prompt_tokens_details": {"cached_tokens": 1280}}})
 
-    monkeypatch.setenv("APEX_TEST_TOKEN", "t0ken")
-    provider = OpenAICompatibleProvider({"base_url": "https://apex.test/v1", "model": "gpt-4o", "api_key_env": "APEX_TEST_TOKEN"},
+    monkeypatch.setenv("LLM_TEST_TOKEN", "t0ken")
+    provider = OpenAICompatibleProvider({"base_url": "https://gateway.test/v1", "model": "gpt-4o", "api_key_env": "LLM_TEST_TOKEN"},
                                         transport=httpx.MockTransport(handler))
     resp = provider.complete("system", "user")
     assert seen["auth"] == "Bearer t0ken"
@@ -153,7 +153,7 @@ def _llm_transport():
                               "request_reference": {"value": "REQ-2026-10-0002", "confidence": 0.99},
                               "requested_changes": [{"field": "daily_debit_limit", "value": "250,000.00", "confidence": 0.81}],
                               "signature_present": {"value": True, "confidence": 0.96}})
-        return httpx.Response(200, json={"model": "apex-gpt", "choices": [{"message": {"content": content}}],
+        return httpx.Response(200, json={"model": "gw-model", "choices": [{"message": {"content": content}}],
                                          "usage": {"prompt_tokens": 1300, "completion_tokens": 90,
                                                    "prompt_tokens_details": {"cached_tokens": 1024}}})
     return httpx.MockTransport(handler)
@@ -164,10 +164,10 @@ def _s2_request(scenarios):
 
 
 def test_env_flag_llm_routes_to_gateway(tmp_path, scenarios, monkeypatch):
-    for k in ("ACH_LLM_MODE", "ACH_LLM_PROVIDER", "ACH_LLM_BASE_URL", "ACH_LLM_MODEL", "APEX_API_KEY"):
+    for k in ("ACH_LLM_MODE", "ACH_LLM_PROVIDER", "ACH_LLM_BASE_URL", "ACH_LLM_MODEL", "LLM_API_KEY"):
         monkeypatch.delenv(k, raising=False)
     env = tmp_path / ".env"
-    env.write_text("ACH_LLM_MODE=llm\nACH_LLM_BASE_URL=https://apex.test/v1\nACH_LLM_MODEL=apex-gpt\nAPEX_API_KEY=secret # token\n")
+    env.write_text("ACH_LLM_MODE=llm\nACH_LLM_BASE_URL=https://gateway.test/v1\nACH_LLM_MODEL=gw-model\nLLM_API_KEY=secret # token\n")
     svc = ExtractionService(BASELINE_RULES.parents[1] / "llm.yaml", tmp_path / "rt", transport=_llm_transport(), env_path=env)
     assert svc.status()["mode"] == "llm" and svc.status()["simulated"] is False
     ext = svc.extract(scenarios["S2"].document_text, _s2_request(scenarios), load_ruleset(BASELINE_RULES).ruleset, "RUN-1")
@@ -182,7 +182,7 @@ def test_env_flag_flips_without_restart(tmp_path, scenarios, monkeypatch):
     env.write_text("ACH_LLM_MODE=deterministic\n")
     svc = ExtractionService(BASELINE_RULES.parents[1] / "llm.yaml", tmp_path / "rt", transport=_llm_transport(), env_path=env)
     assert svc.status()["mode"] == "deterministic"
-    env.write_text("ACH_LLM_MODE=llm\nACH_LLM_BASE_URL=https://apex.test/v1\nACH_LLM_MODEL=m\nAPEX_API_KEY=k\n")
+    env.write_text("ACH_LLM_MODE=llm\nACH_LLM_BASE_URL=https://gateway.test/v1\nACH_LLM_MODEL=m\nLLM_API_KEY=k\n")
     assert svc.status()["mode"] == "llm"
 
 
@@ -195,13 +195,13 @@ def test_process_env_overrides_env_file(tmp_path, monkeypatch):
 
 
 def test_llm_mode_without_endpoint_fails_safe(tmp_path, scenarios, monkeypatch):
-    for k in ("ACH_LLM_MODE", "ACH_LLM_BASE_URL", "ACH_LLM_MODEL", "APEX_API_KEY"):
+    for k in ("ACH_LLM_MODE", "ACH_LLM_BASE_URL", "ACH_LLM_MODEL", "LLM_API_KEY"):
         monkeypatch.delenv(k, raising=False)
     env = tmp_path / ".env"
     env.write_text("ACH_LLM_MODE=llm\n")
     svc = ExtractionService(BASELINE_RULES.parents[1] / "llm.yaml", tmp_path / "rt", env_path=env)
     ext = svc.extract(scenarios["S2"].document_text, _s2_request(scenarios), load_ruleset(BASELINE_RULES).ruleset, "RUN-2")
-    assert ext.status == "FAILED" and "APEX_API_KEY" in (ext.error or "")
+    assert ext.status == "FAILED" and "LLM_API_KEY" in (ext.error or "")
 
 
 def test_every_agent_declares_its_handoff(client):

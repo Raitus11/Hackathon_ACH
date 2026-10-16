@@ -8,7 +8,7 @@
 #
 # ON/OFF SWITCH: set ACH_LLM_MODE in .env (see .env.example):
 #   ACH_LLM_MODE=deterministic -> provider mock (no LLM call)
-#   ACH_LLM_MODE=llm           -> provider openai_compatible (APEX gateway)
+#   ACH_LLM_MODE=llm           -> provider openai_compatible (LLM gateway)
 # If ACH_LLM_MODE is unset, `provider:` below is used.
 #
 # provider:
@@ -16,7 +16,7 @@
 #                      Token counts are estimated (chars/4); provider prompt
 #                      caching is simulated. Default, so the demo never depends
 #                      on network access.
-#   openai_compatible  POST {base_url}/chat/completions — use for APEX / Copilot
+#   openai_compatible  POST {base_url}/chat/completions — use for an enterprise LLM gateway
 #                      gateway if it exposes an OpenAI-compatible endpoint.
 #
 # Overrides (process env or .env): ACH_LLM_MODE, ACH_LLM_PROVIDER, ACH_LLM_BASE_URL,
@@ -27,12 +27,12 @@
 provider: mock
 
 openai_compatible:
-  base_url: https://apex.example.internal/v1     # placeholder — replace with the APEX endpoint
-  model: gpt-4o                                  # placeholder — model id exposed by APEX
-  api_key_env: APEX_API_KEY                      # env var holding the token
+  base_url: https://llm-gateway.example/v1      # placeholder — replace with the approved gateway endpoint
+  model: gpt-4o                                  # placeholder — model id exposed by the gateway
+  api_key_env: LLM_API_KEY                       # env var holding the token
   auth_header: Authorization                     # header name the gateway expects
   auth_scheme: Bearer                            # "" to send the raw token
-  extra_headers: {}                              # e.g. { x-apex-app-id: ach-hackathon }
+  extra_headers: {}                              # e.g. { x-app-id: ach-hackathon }
   timeout_seconds: 30
   max_retries: 2
   ca_bundle: null                                # path to corporate CA bundle if TLS inspection is used
@@ -50,7 +50,7 @@ response_cache:
 prompt_version: extraction-v1
 
 # Illustrative pricing for the cost column (USD per 1M tokens).
-# Replace with the APEX rate card; labelled "illustrative" in the UI.
+# Replace with the gateway's rate card; labelled "illustrative" in the UI.
 pricing_per_million:
   input: 2.50
   cached_input: 1.25

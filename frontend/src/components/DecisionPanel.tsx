@@ -3,13 +3,14 @@ import { ApiError, api } from "../api";
 import type { ApiErrorBody, DecisionRecord, DecisionType, DocumentExtraction, Persona, ValidationResult } from "../types";
 import { DecisionChip, IconDownload, IconLock, IconSearch, IconShield, IconSpark, fmtTime } from "./ui";
 
-export function DecisionPanel({ result, decision, persona, personas, extraction, onRecorded }: {
+export function DecisionPanel({ result, decision, persona, personas, extraction, onRecorded, onOpenQueue }: {
   result: ValidationResult | null;
   extraction: DocumentExtraction | null;
   decision: DecisionRecord | null;
   persona: Persona | null;
   personas: Persona[];
   onRecorded: (d: DecisionRecord) => void;
+  onOpenQueue?: () => void;
 }) {
   const [choice, setChoice] = useState<DecisionType | null>(null);
   const [comment, setComment] = useState("");
@@ -60,12 +61,14 @@ export function DecisionPanel({ result, decision, persona, personas, extraction,
             <div className="small muted">Recorded {fmtTime(decision.recorded_at)} · {decision.decision_id}</div>
             <div className="small">Engine outcome at decision: <strong>{decision.engine_outcome}</strong>
               {decision.acknowledged_exceptions && " · exceptions explicitly acknowledged"}
-              {decision.ai_review_confirmed && " · AI-extracted values reviewed"}</div>
+              {decision.ai_review_confirmed && (extraction?.ai_assisted ? " · AI-extracted values reviewed" : " · extracted form values reviewed")}</div>
             <blockquote style={{ margin: 0, padding: "8px 12px", borderLeft: "3px solid var(--line-strong)", background: "var(--surface-2)" }}>{decision.comment}</blockquote>
             {decision.decision === "INVESTIGATE" && (
-              <div className="small muted">
-                Reference process: the checker contacts the original processor, corrections or documents are provided, and the item is revalidated.
-                Exception routing and rework are <strong>not built</strong> in this prototype (out of scope; would be CheckMate · simulated).
+              <div className="small">
+                <span className="sim-tag">SIMULATED</span> Routed to the exception queue for the original processor
+                ({maker ? `${maker.name}, ${maker.id}` : result.implemented_by}).{" "}
+                {onOpenQueue && <button className="btn-link" onClick={onOpenQueue}>Open exception queue</button>}
+                <div className="muted" style={{ marginTop: 4 }}>Correction, resubmission and revalidation stay out of scope (FAQ Q15, Q33).</div>
               </div>
             )}
           </div>

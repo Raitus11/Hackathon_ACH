@@ -4,6 +4,11 @@ import { AboutView } from "./components/AboutView";
 import { AgentFlow } from "./components/AgentFlow";
 import { AgentPipelineView } from "./components/AgentPipeline";
 import { ExtractionCard } from "./components/ExtractionCard";
+import { ExceptionQueue } from "./components/ExceptionQueue";
+import { MakerFeedback } from "./components/MakerFeedback";
+import { RuleCompare } from "./components/RuleCompare";
+import { ScenarioSuite } from "./components/ScenarioSuite";
+import { SideBySide } from "./components/SideBySide";
 import { TokenView } from "./components/TokenView";
 import { AuditView } from "./components/AuditView";
 import { DecisionPanel } from "./components/DecisionPanel";
@@ -14,7 +19,7 @@ import { SummaryCard } from "./components/SummaryCard";
 import { IconPlay, IconShield, OutcomeChip } from "./components/ui";
 import type { AgentStep, ApiErrorBody, ConfigPayload, DecisionRecord, DocumentExtraction, Inputs, Meta, ScenarioSummary, ValidationResult } from "./types";
 
-type Tab = "review" | "pipeline" | "tokens" | "audit" | "about";
+type Tab = "review" | "queue" | "suite" | "pipeline" | "tokens" | "audit" | "about";
 type Source = { kind: "scenario"; id: string } | { kind: "files"; name: string };
 
 const asError = (e: unknown): ApiErrorBody =>
@@ -106,15 +111,28 @@ export default function App() {
     if (!rf || !cf) return;
     setRunError(null); setResult(null); setDecision(null); setExtraction(null); setPipeline(null);
     try {
-      
-      const request = JSON.parse(await rf.text());
-      const change = JSON.parse(await cf.text());
+      let request = JSON.parse(await rf.text());
+      let change = JSON.parse(await cf.text());
+      const isReq = (o: any) => o && Array.isArray(o.requested_changes);
+      const isChg = (o: any) => o && Array.isArray(o.tnal_entries);
+      let swapped = false;
+      if (!isReq(request) && isReq(change) && isChg(request)) {
+        [request, change] = [change, request];
+        swapped = true;
+      }
+      const problems: { location: string; message: string }[] = [];
+      if (!isReq(request)) problems.push({ location: rf.name, message: "is not a maintenance request (no requested_changes array)" });
+      if (!isChg(change)) problems.push({ location: cf.name, message: "is not an implemented-change record (no tnal_entries array)" });
+      if (problems.length) {
+        setInputs(null); setSource(null);
+        setRunError({ code: "WRONG_FILE_IN_SLOT", message: "Files do not match their slots.", details: problems });
+        return;
+      }
       const df = docFile.current?.files?.[0];
       setDocText(df ? await df.text() : null);
       setInputs({ request, implemented_change: change });
       setSource({ kind: "files", name: `${rf.name} + ${cf.name}` });
-      setNote(`Loaded from files: ${rf.name}, ${cf.name}. Must be synthetic data.`);
-      setNote(`Loaded from files: ${rf.name}, ${cf.name}. Must be synthetic data.`);
+      setNote(`Loaded from files: ${rf.name}, ${cf.name}.${swapped ? " Request and change files were in swapped slots and were corrected." : ""} Must be synthetic data.`);
     } catch (e) {
       setRunError({ code: "FILE_NOT_JSON", message: `Could not parse file as JSON: ${String(e)}`, details: [] });
     }
@@ -144,13 +162,15 @@ export default function App() {
       </header>
 
       <nav className="tabs" role="tablist">
-        {([["review", "Validation review"], ["pipeline", "Agent pipeline"], ["tokens", "Token analysis"], ["audit", "Audit trail"], ["about", "Process, simulated systems & assumptions"]] as const).map(([k, label]) => (
-          <button key={k} role="tab" className="tab" aria-selected={tab === k} onClick={() => { setTab(k); if (k === "audit" || k === "tokens") setAuditKey((n) => n + 1); }}>
+        {([["review", "Validation review"], ["queue", "Exception queue"], ["suite", "Scenario results"], ["audit", "Audit trail"], ["pipeline", "Agent pipeline"], ["tokens", "Token analysis"], ["about", "Process, simulated systems & assumptions"]] as const).map(([k, label]) => (
+          <button key={k} role="tab" className="tab" aria-selected={tab === k} onClick={() => { setTab(k); if (k === "audit" || k === "tokens" || k === "queue") setAuditKey((n) => n + 1); }}>
             {label}
           </button>
         ))}
       </nav>
 
+      {tab === "queue" && <ExceptionQueue personas={personas} persona={persona} refreshKey={auditKey} />}
+      {tab === "suite" && <ScenarioSuite personaId={personaId} />}
       {tab === "pipeline" && <AgentPipelineView steps={pipeline} runId={result?.run_id ?? null} />}
       {tab === "tokens" && <TokenView refreshKey={auditKey} personaId={personaId} />}
       {tab === "audit" && <AuditView personas={personas} refreshKey={auditKey} />}
@@ -219,16 +239,22 @@ export default function App() {
                 )}
               </div>
             )}
+            {result && persona && <MakerFeedback result={result} persona={persona} />}
             {result && <SummaryCard result={result} decision={decision} personas={personas} />}
-            {pipeline && result && <AgentFlow steps={pipeline} runId={result.run_id} compact />}
             {result && <FindingsTable key={result.run_id} result={result} />}
+            {result && inputs && <SideBySide inputs={inputs} result={result} />}
+            {source && inputs && (
+              <RuleCompare personaId={personaId} refreshKey={auditKey}
+                source={source.kind === "scenario" ? { scenario_id: source.id } : { request: inputs.request, implemented_change: inputs.implemented_change }} />
+            )}
+            {pipeline && result && <AgentFlow steps={pipeline} runId={result.run_id} compact />}
             {extraction && <ExtractionCard extraction={extraction} />}
             {inputs && <InputsPanel inputs={inputs} result={result} note={note} />}
           </section>
 
           <aside className="col">
             <DecisionPanel result={result} decision={decision} persona={persona} personas={personas} extraction={extraction}
-              onRecorded={(d) => { setDecision(d); setAuditKey((k) => k + 1); }} />
+              onRecorded={(d) => { setDecision(d); setAuditKey((k) => k + 1); }} onOpenQueue={() => { setTab("queue"); setAuditKey((k) => k + 1); }} />
             <RulePanel config={config} configError={configError} result={result} onRerun={run} busy={busy} />
           </aside>
         </main>

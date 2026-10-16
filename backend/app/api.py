@@ -18,6 +18,9 @@ from .audit import AuditLog
 from .config import ConfigError, LoadedConfig, load_ruleset
 from .agents import run_pipeline
 from .evidence import build_pack, render_markdown
+from .exqueue import SIMULATION_LABEL, ExceptionQueue
+from .replay import compare, describe, list_config_options, resolve
+from .suite import run_suite
 from .ingest import IngestError
 from .llm import ExtractionService
 from .logging_setup import configure_logging, correlation_id
@@ -36,7 +39,7 @@ SIMULATED_SYSTEMS = [
     {"name": "GPS Customer Data Change Report", "role": "Summary of customer data changes", "status": "SIMULATED — synthetic JSON file"},
     {"name": "ACH / AES / ACH Customer Database", "role": "Where the maker implements the change", "status": "NOT INTEGRATED — represented only by the TNAL/GPS files"},
     {"name": "CheckMate", "role": "Daily validation task and decision capture", "status": "SIMULATED — decision captured in this prototype only"},
-    {"name": "LLM gateway (APEX / Copilot)", "role": "Document Extraction Agent only", "status": "SIMULATED offline mock by default; live gateway optional via config/llm.yaml"},
+    {"name": "LLM gateway", "role": "Document Extraction Agent only", "status": "SIMULATED offline mock by default; live gateway optional via config/llm.yaml"},
 ]
 
 ASSUMPTIONS = [
@@ -73,6 +76,22 @@ class RunRequest(BaseModel):
         return self
 
 
+class CompareRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    scenario_id: str | None = None
+    request: dict[str, Any] | None = None
+    implemented_change: dict[str, Any] | None = None
+    baseline: str = Field(min_length=1, max_length=200)
+    candidate: str = Field(min_length=1, max_length=200)
+
+    @model_validator(mode="after")
+    def _one_source(self) -> "CompareRequest":
+        has_files = self.request is not None and self.implemented_change is not None
+        if bool(self.scenario_id) == has_files:
+            raise ValueError("provide either scenario_id, or both request and implemented_change")
+        return self
+
+
 def _error(status: int, code: str, message: str, details: list | None = None) -> JSONResponse:
     return JSONResponse(status_code=status, content={"error": {"code": code, "message": message, "details": details or []}})
 
@@ -86,6 +105,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     extractor = ExtractionService(settings.llm_config_path, settings.runtime_dir, env_path=settings.env_path)
     configs_dir = settings.runtime_dir / "configs"
     configs_dir.mkdir(parents=True, exist_ok=True)
+    samples_dir = settings.rules_path.parent / "samples"
+    exq = ExceptionQueue(settings.runtime_dir / "exception_queue.jsonl")
 
     app = FastAPI(title="ACH Maker-Checker Validation (prototype)", version=__version__)
 
@@ -189,6 +210,83 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             "raw_yaml": cfg.raw_text,
         }
 
+    def config_options():
+        current_config()  # ensure the active file's snapshot exists
+        recent = [(r.config_hash, r.run_id, r.evaluated_at.isoformat()) for r in store.list_runs()]
+        return list_config_options(settings.rules_path, samples_dir, configs_dir, recent)
+
+    @app.get("/api/configs")
+    def list_configs() -> list[dict]:
+        out = []
+        for o in config_options():
+            try:
+                cfg = load_ruleset(o.path)
+                out.append({**describe(cfg, o.key, [o]), "valid": True})
+            except ConfigError as exc:
+                out.append({"key": o.key, "kind": o.kind, "label": o.label, "valid": False, "error": exc.message})
+        return out
+
+    @app.post("/api/compare")
+    def compare_configs(body: CompareRequest, x_persona_id: str | None = Header(default=None)) -> Any:
+        if body.scenario_id:
+            s = scenarios().get(body.scenario_id)
+            if not s:
+                return _error(404, "SCENARIO_NOT_FOUND", f"No scenario {body.scenario_id}")
+            request_data, change_data = s.request, s.change
+        else:
+            request_data, change_data = body.request, body.implemented_change
+        options = config_options()
+        base, cand = resolve(body.baseline, options), resolve(body.candidate, options)
+        out = compare(request_data, change_data, base, cand, scenario_id=body.scenario_id)
+        out["baseline"] = describe(base, body.baseline, options)
+        out["candidate"] = describe(cand, body.candidate, options)
+        audit.append("RULE_VERSION_COMPARISON", run_id=None, actor=x_persona_id, payload={
+            "scenario_id": body.scenario_id, "request_id": out["request_id"], "input_digest": out["input_digest"],
+            "baseline": {"version": out["baseline"]["version"], "sha256": base.sha256,
+                         "overall": out["baseline_result"]["overall"]},
+            "candidate": {"version": out["candidate"]["version"], "sha256": cand.sha256,
+                          "overall": out["candidate_result"]["overall"]},
+            "changed_findings": out["changed_findings"]})
+        return out
+
+    @app.post("/api/scenarios/suite")
+    def scenario_suite(x_persona_id: str | None = Header(default=None)) -> dict:
+        cfg = current_config()
+        out = run_suite(list(scenarios().values()), cfg)
+        audit.append("SCENARIO_SUITE_RUN", run_id=None, actor=x_persona_id, payload={
+            "config_version": cfg.ruleset.ruleset.version, "config_sha256": cfg.sha256, **out["summary"]})
+        return out
+
+    @app.get("/api/queue")
+    def get_queue() -> dict:
+        return {"label": SIMULATION_LABEL, "items": exq.read()}
+
+    @app.get("/api/metrics")
+    def metrics() -> dict:
+        events = audit.read()
+        runs = [e for e in events if e["event_type"] == "VALIDATION_RUN_COMPLETED"]
+        by_rule: dict[str, int] = {}
+        for e in runs:
+            for rid in e["payload"].get("exception_rules", []):
+                by_rule[rid] = by_rule.get(rid, 0) + 1
+        decisions = [e for e in events if e["event_type"] == "CHECKER_DECISION_RECORDED"]
+        blocked = [e for e in events if e["event_type"] == "DECISION_BLOCKED"]
+        durations = [sum(st.get("duration_ms", 0) for st in store.extras(r.run_id).get("pipeline", []))
+                     for r in store.list_runs()]
+        return {
+            "runs": len(runs),
+            "pass": sum(1 for e in runs if e["payload"].get("engine_outcome") == "PASS"),
+            "exception": sum(1 for e in runs if e["payload"].get("engine_outcome") == "EXCEPTION"),
+            "exceptions_by_rule": dict(sorted(by_rule.items())),
+            "decisions": {"APPROVE": sum(1 for e in decisions if e["payload"].get("decision") == "APPROVE"),
+                          "INVESTIGATE": sum(1 for e in decisions if e["payload"].get("decision") == "INVESTIGATE")},
+            "blocked_attempts": len(blocked),
+            "self_approval_blocked": sum(1 for e in blocked if e["payload"].get("code") == "SELF_APPROVAL_BLOCKED"),
+            "routed_to_queue": sum(1 for e in events if e["event_type"] == "EXCEPTION_ROUTED_SIMULATED"),
+            "avg_run_ms": round(sum(durations) / len(durations), 2) if durations else None,
+            "note": "Prototype counters derived from the local audit log. Not a monitoring platform.",
+        }
+
     # ------------------------------------------------------------- validation
 
     @app.post("/api/runs")
@@ -283,7 +381,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             actor_name=actor.name,
             actor_role=actor.role,
             comment=body.comment.strip(),
-            acknowledged_exceptions=body.acknowledge_exceptions and result.exception_count > 0,
+            acknowledged_exceptions=(body.decision.value == "APPROVE" and body.acknowledge_exceptions
+                                     and result.exception_count > 0),
             ai_review_confirmed=bool(body.ai_review_confirmed and extraction and extraction.status == "EXTRACTED"),
             engine_outcome=result.overall,
             config_hash=result.config_hash,
@@ -296,7 +395,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                      payload={"decision": record.decision.value, "engine_outcome": result.overall.value,
                               "acknowledged_exceptions": record.acknowledged_exceptions,
                               "ai_review_confirmed": record.ai_review_confirmed, "comment": record.comment})
-        return {"decision": record.model_dump(mode="json")}
+        routed = None
+        if record.decision.value == "INVESTIGATE":
+            routed = exq.route(result, record)
+            audit.append("EXCEPTION_ROUTED_SIMULATED", run_id=run_id, actor=actor.id,
+                         payload={"queue_item_id": routed["queue_item_id"], "routed_to": routed["routed_to"],
+                                  "simulated": True, "exceptions": len(routed["exceptions"])})
+        return {"decision": record.model_dump(mode="json"), "routed": routed}
 
     # ------------------------------------------------------------- traceability
 

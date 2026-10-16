@@ -97,7 +97,7 @@ class ExtractionService:
         oc["base_url"] = env.get("ACH_LLM_BASE_URL") or oc.get("base_url")
         oc["model"] = env.get("ACH_LLM_MODEL") or oc.get("model")
         oc["ca_bundle"] = env.get("ACH_LLM_CA_BUNDLE") or oc.get("ca_bundle")
-        oc["_api_key"] = env.get(oc.get("api_key_env") or "APEX_API_KEY") or ""
+        oc["_api_key"] = env.get(oc.get("api_key_env") or "LLM_API_KEY") or ""
         data["openai_compatible"] = oc
         data["_mode_flag"] = mode or None
         return data

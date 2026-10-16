@@ -24,7 +24,8 @@ export function SummaryCard({ result, decision, personas }: {
       <div className="notice">
         <IconInfo />
         <span><strong>Decision support only.</strong> This result is not an approval. The independent checker records the final
-          Approve or Investigate decision below.</span>
+          Approve or Investigate decision{exc ? "" : ", even on a PASS"}. Deterministic rule result: the same inputs and rule file
+          always give the same findings, so no confidence score applies.</span>
       </div>
       <ul className="reasons">
         {result.summary_reasons.map((r) => <li key={r}>{r}</li>)}

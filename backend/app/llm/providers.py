@@ -3,7 +3,7 @@
 MockProvider          offline and deterministic; labelled SIMULATED. Parses the synthetic form
                       with simple patterns and reports estimated token usage, including a
                       simulated provider prompt cache keyed on the system-prompt prefix.
-OpenAICompatibleProvider  any gateway exposing POST {base_url}/chat/completions (e.g. APEX).
+OpenAICompatibleProvider  any gateway exposing POST {base_url}/chat/completions (e.g. an enterprise LLM gateway).
                       Reads real usage, including cached prompt tokens when the gateway reports them.
 """
 
@@ -138,7 +138,7 @@ class MockProvider:
         )
 
 
-# ---------------------------------------------------------------- OpenAI-compatible (e.g. APEX)
+# ---------------------------------------------------------------- OpenAI-compatible gateway
 
 
 class OpenAICompatibleProvider:
@@ -172,7 +172,7 @@ class OpenAICompatibleProvider:
         cached = int(details.get("cached_tokens") or usage.get("cache_read_input_tokens") or 0)
         written = int(usage.get("cache_creation_input_tokens") or 0)
         if usage.get("cache_read_input_tokens") is not None or written:
-            # Anthropic-style usage reports uncached input separately; make input_tokens the total.
+            # Some providers report uncached input separately; make input_tokens the total.
             prompt = int(usage.get("input_tokens") or 0) + cached + written
         return prompt, completion, cached, written
 

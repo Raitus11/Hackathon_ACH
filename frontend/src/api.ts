@@ -1,6 +1,11 @@
 import type {
   ApiErrorBody,
   AuditEvent,
+  Comparison,
+  ConfigOption,
+  Metrics,
+  QueueItem,
+  SuitePayload,
   ConfigPayload,
   DecisionRecord,
   DecisionType,
@@ -47,7 +52,7 @@ export const api = {
       personaId,
     ),
   decide: (runId: string, personaId: string, decision: DecisionType, comment: string, acknowledge: boolean, aiReviewed: boolean) =>
-    call<{ decision: DecisionRecord }>(
+    call<{ decision: DecisionRecord; routed: QueueItem | null }>(
       `/runs/${encodeURIComponent(runId)}/decision`,
       {
         method: "POST",
@@ -55,6 +60,12 @@ export const api = {
       },
       personaId,
     ),
+  configs: () => call<ConfigOption[]>("/configs"),
+  compare: (source: { scenario_id: string } | { request: unknown; implemented_change: unknown }, baseline: string, candidate: string, personaId: string) =>
+    call<Comparison>("/compare", { method: "POST", body: JSON.stringify({ ...source, baseline, candidate }) }, personaId),
+  queue: () => call<{ label: string; items: QueueItem[] }>("/queue"),
+  suite: (personaId: string) => call<SuitePayload>("/scenarios/suite", { method: "POST" }, personaId),
+  metrics: () => call<Metrics>("/metrics"),
   llmUsage: () => call<UsagePayload>("/llm/usage"),
   clearLlmCache: (personaId: string) => call<{ entries_removed: number }>("/llm/cache/clear", { method: "POST" }, personaId),
   audit: (runId?: string) => call<AuditEvent[]>(`/audit${runId ? `?run_id=${encodeURIComponent(runId)}` : ""}`),
