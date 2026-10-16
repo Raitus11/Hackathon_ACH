@@ -1,0 +1,37 @@
+{
+  "change_id": "CHG-2026-10-0004",
+  "request_id": "REQ-2026-10-0004",
+  "customer_id": "CUST-40519",
+  "implemented_by": "P-1001",
+  "implemented_at": "2026-10-15T13:02:00Z",
+  "tnal_entries": [
+    {
+      "record_id": "TNAL-000401",
+      "customer_id": "CUST-40519",
+      "field": "contact_email",
+      "old_value": "ops@riverbend-logistics.example",
+      "new_value": "payables@riverbend-logistics.example",
+      "changed_by": "P-1001",
+      "changed_at": "2026-10-15T13:01:07Z"
+    },
+    {
+      "record_id": "TNAL-000402",
+      "customer_id": "CUST-40519",
+      "field": "allowed_sec_codes",
+      "old_value": "CCD",
+      "new_value": "CCD,PPD,WEB",
+      "changed_by": "P-1001",
+      "changed_at": "2026-10-15T13:01:39Z"
+    }
+  ],
+  "gps_changes": [
+    {
+      "field": "contact_email",
+      "new_value": "payables@riverbend-logistics.example"
+    },
+    {
+      "field": "allowed_sec_codes",
+      "new_value": "CCD,PPD,WEB"
+    }
+  ]
+}

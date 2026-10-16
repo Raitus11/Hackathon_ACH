@@ -1,0 +1,104 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# SAMPLE v1.1.0 (AC4 comparison) — External validation-rule configuration — C-247489 ACH DB Next Day Validation
+# SYNTHETIC / PROTOTYPE. Not a production rule catalogue.
+#
+# This file is the only place validation behaviour is defined. It is re-read on
+# every validation run: edit it, click "Re-run", and the new behaviour applies.
+# No application code changes. Every finding shows the rule id + version used.
+#
+# Rule types (organizer categories): request_approved, required, equality,
+#   authorized_scope, source_consistency (GPS vs TNAL), evidence_present
+# Reason-template placeholders: {rule_id} {field} {field_label} {expected}
+#   {actual} {request_id} {request_type} {status} {indicator} {indicator_label}
+#   {changed_count} {changed_by} {record_id}
+# ─────────────────────────────────────────────────────────────────────────────
+
+ruleset:
+  id: ACH-DB-NEXT-DAY
+  control_id: C-247489
+  name: ACH DB Next Day Validation — first-pass comparison
+  version: 1.1.0
+  effective_date: "2026-10-16"
+  owner: Payments Operations control owner (synthetic placeholder)
+  description: Compares the approved maintenance request with TNAL/GPS-style implemented changes.
+  data_classification: SYNTHETIC
+
+# Field dictionary (synthetic, pending organizer assets): display label and
+# normalisation applied before comparison.
+fields:
+  company_name:              { label: Company name,              normalize: [trim, casefold] }
+  settlement_routing_number: { label: Settlement routing number, normalize: [digits_only] }
+  settlement_account_number: { label: Settlement account number, normalize: [digits_only] }
+  daily_debit_limit:         { label: Daily debit limit (USD),   normalize: [decimal] }
+  allowed_sec_codes:         { label: Allowed SEC codes,         normalize: [sorted_csv] }
+  contact_email:             { label: Contact email,             normalize: [trim, casefold] }
+
+rules:
+  - id: REQ-001
+    version: 1
+    type: request_approved
+    description: Maintenance request exists and is approved
+    severity: HIGH
+    approved_statuses: [APPROVED]
+    reason_template: "Request {request_id} has status {actual}; only {expected} requests may be implemented."
+    match_template: "Request {request_id} is {actual}."
+
+  - id: FLD-001
+    version: 1
+    type: required
+    description: Every requested field has a non-blank implemented value
+    severity: HIGH
+    applies_to: requested_fields
+    reason_template: "{field_label} was requested as {expected} but the implemented value is {actual} ({record_id}). The requested change is not complete."
+
+  - id: FLD-002
+    version: 1
+    type: equality
+    description: Implemented value equals the approved requested value
+    severity: HIGH
+    applies_to: requested_fields
+    reason_template: "{field_label} was implemented as {actual} but the approved request specifies {expected} ({record_id}, changed by {changed_by})."
+    match_template: "{field_label} implemented as requested."
+
+  - id: AUT-001
+    version: 1
+    type: authorized_scope
+    description: Every changed field was included in the approved request
+    severity: HIGH
+    exempt_fields: []
+    reason_template: "{field_label} changed from {expected} to {actual} ({record_id}, by {changed_by}) but was not part of request {request_id}."
+    match_template: "All {changed_count} changed field(s) were in request {request_id}."
+
+  - id: GPS-001
+    version: 1
+    type: source_consistency
+    description: GPS change report matches the ACH (TNAL) implementation
+    severity: MEDIUM
+    compare: tnal_vs_gps
+    reason_template: "{field_label} is {expected} in TNAL but {actual} on the GPS change report."
+    match_template: "GPS change report agrees with TNAL for all {changed_count} field(s)."
+
+  - id: EVD-001
+    version: 1
+    type: evidence_present
+    description: Signed customer authorization form is on file
+    severity: HIGH
+    indicator: signed_authorization_form
+    indicator_label: Signed authorization form
+    required_when:
+      request_types: [ACCOUNT_MAINTENANCE]
+    reason_template: "Required evidence '{indicator_label}' is {actual} for {request_type} request {request_id}. Checker investigation required."
+    match_template: "{indicator_label} is on file."
+
+  - id: EVD-002
+    version: 2
+    type: evidence_present
+    description: Callback verification recorded for settlement account changes
+    severity: HIGH
+    enabled: true           # v1.1.0: callback verification now required (policy tightened)
+    indicator: callback_verification
+    indicator_label: Callback verification
+    required_when:
+      fields_changed_any: [settlement_routing_number, settlement_account_number]
+    reason_template: "Settlement account details changed but '{indicator_label}' is {actual} on request {request_id}. Checker investigation required."
+    match_template: "{indicator_label} is on file."

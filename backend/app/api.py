@@ -1,0 +1,345 @@
+"""HTTP API. Run validation (any persona), record decisions (independent checker only)."""
+
+from __future__ import annotations
+
+import logging
+import uuid
+from datetime import datetime, timezone
+from typing import Any, Literal
+
+from fastapi import FastAPI, Header, Query, Request
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse, PlainTextResponse, Response
+from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel, ConfigDict, Field, model_validator
+
+from . import __version__
+from .audit import AuditLog
+from .config import ConfigError, LoadedConfig, load_ruleset
+from .agents import run_pipeline
+from .evidence import build_pack, render_markdown
+from .ingest import IngestError
+from .llm import ExtractionService
+from .logging_setup import configure_logging, correlation_id
+from .models import DecisionInput, DecisionRecord, DocumentExtraction, Persona
+from .scenarios import Scenario, load_scenarios
+from .settings import Settings, load_settings
+from .sod import SodViolation, check_decision_allowed, load_personas, open_exception_rules
+from .store import RunStore
+
+log = logging.getLogger("ach.api")
+
+SIMULATED_SYSTEMS = [
+    {"name": "ServiceNow / Fulfillment Platform", "role": "Maintenance request (expected values)", "status": "SIMULATED — synthetic JSON file"},
+    {"name": "DMS", "role": "Supporting-document evidence indicators", "status": "SIMULATED — boolean indicators on the request"},
+    {"name": "TNAL Critical Field Audit Log", "role": "Field-level old/new implemented values (actual values)", "status": "SIMULATED — synthetic JSON file"},
+    {"name": "GPS Customer Data Change Report", "role": "Summary of customer data changes", "status": "SIMULATED — synthetic JSON file"},
+    {"name": "ACH / AES / ACH Customer Database", "role": "Where the maker implements the change", "status": "NOT INTEGRATED — represented only by the TNAL/GPS files"},
+    {"name": "CheckMate", "role": "Daily validation task and decision capture", "status": "SIMULATED — decision captured in this prototype only"},
+    {"name": "LLM gateway (APEX / Copilot)", "role": "Document Extraction Agent only", "status": "SIMULATED offline mock by default; live gateway optional via config/llm.yaml"},
+]
+
+ASSUMPTIONS = [
+    "All data is synthetic and pending organizer assets; customers, people and values are fictional.",
+    "A change record is matched to a request by request_id, and customer_id must also agree.",
+    "The request is the source of expected values; the TNAL record is the source of actual values.",
+    "If a field changed more than once, the latest TNAL row is the implemented value.",
+    "A missing or blank requested field is reported once, as MISSING_FIELD, not again as a mismatch.",
+    "An unauthorized change is any TNAL field whose value changed and that was not in the request.",
+    "Evidence is represented by boolean indicators; which indicators are required is set in the rule config.",
+    "Identity is a persona header for demonstration. The maker of a change can never record its decision.",
+    "The checker may Approve an item with exceptions only with explicit acknowledgement and a justification.",
+    "The engine outcome is decision support. Nothing is approved without a recorded checker decision.",
+    "AI is used by one agent only (document extraction, one synthetic form type). Its output is advisory, "
+    "labelled, must be confirmed by the checker, and is never read by the rule engine.",
+    "No volumes, handling times or savings are claimed; baselines have not been provided.",
+]
+
+
+class RunRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    scenario_id: str | None = None
+    request: dict[str, Any] | None = None
+    implemented_change: dict[str, Any] | None = None
+    document_text: str | None = Field(default=None, max_length=20_000)
+
+    @model_validator(mode="after")
+    def _one_source(self) -> "RunRequest":
+        has_files = self.request is not None or self.implemented_change is not None
+        if bool(self.scenario_id) == has_files:
+            raise ValueError("provide either scenario_id, or both request and implemented_change")
+        if has_files and (self.request is None or self.implemented_change is None):
+            raise ValueError("both request and implemented_change are required")
+        return self
+
+
+def _error(status: int, code: str, message: str, details: list | None = None) -> JSONResponse:
+    return JSONResponse(status_code=status, content={"error": {"code": code, "message": message, "details": details or []}})
+
+
+def create_app(settings: Settings | None = None) -> FastAPI:
+    settings = settings or load_settings()
+    configure_logging()
+    audit = AuditLog(settings.audit_path)
+    store = RunStore(settings.runs_dir)
+    personas = load_personas(settings.personas_path)
+    extractor = ExtractionService(settings.llm_config_path, settings.runtime_dir, env_path=settings.env_path)
+    configs_dir = settings.runtime_dir / "configs"
+    configs_dir.mkdir(parents=True, exist_ok=True)
+
+    app = FastAPI(title="ACH Maker-Checker Validation (prototype)", version=__version__)
+
+    def scenarios() -> dict[str, Scenario]:
+        return {s.id: s for s in load_scenarios(settings.scenarios_dir)}
+
+    def current_config() -> LoadedConfig:
+        cfg = load_ruleset(settings.rules_path)  # re-read every time: hot reload by design
+        snapshot = configs_dir / f"{cfg.sha256}.yaml"
+        if not snapshot.exists():
+            snapshot.write_text(cfg.raw_text, encoding="utf-8")
+        return cfg
+
+    def persona(persona_id: str | None) -> Persona:
+        if not persona_id or persona_id not in personas:
+            raise SodViolation("UNKNOWN_PERSONA", "Select a known test persona (X-Persona-Id header).", status=401)
+        return personas[persona_id]
+
+    # ------------------------------------------------------------- middleware and errors
+
+    @app.middleware("http")
+    async def _correlation(request: Request, call_next):
+        cid = request.headers.get("X-Correlation-Id") or uuid.uuid4().hex[:16]
+        token = correlation_id.set(cid)
+        try:
+            response = await call_next(request)
+        finally:
+            correlation_id.reset(token)
+        response.headers["X-Correlation-Id"] = cid
+        response.headers["X-Data-Classification"] = "SYNTHETIC"
+        return response
+
+    @app.exception_handler(ConfigError)
+    async def _config_error(_: Request, exc: ConfigError):
+        return _error(422, "CONFIG_INVALID", exc.message, exc.details)
+
+    @app.exception_handler(IngestError)
+    async def _ingest_error(_: Request, exc: IngestError):
+        return _error(422, exc.code, exc.message, exc.details)
+
+    @app.exception_handler(SodViolation)
+    async def _sod_error(_: Request, exc: SodViolation):
+        return _error(exc.status, exc.code, exc.message)
+
+    @app.exception_handler(RequestValidationError)
+    async def _validation_error(_: Request, exc: RequestValidationError):
+        details = [{"location": ".".join(str(p) for p in e["loc"]), "message": e["msg"]} for e in exc.errors()]
+        return _error(422, "REQUEST_INVALID", "Request body failed validation", details)
+
+    # ------------------------------------------------------------- reference data
+
+    @app.get("/api/health")
+    def health() -> dict:
+        return {"status": "ok", "version": __version__, "data_classification": "SYNTHETIC"}
+
+    @app.get("/api/meta")
+    def meta() -> dict:
+        return {
+            "app_name": "ACH Maker-Checker Validation Workbench",
+            "control_id": "C-247489",
+            "control_name": "ACH DB Next Day Validation",
+            "label": "SYNTHETIC DATA · SIMULATED SYSTEMS · PROTOTYPE — NOT PRODUCTION",
+            "simulated_systems": SIMULATED_SYSTEMS,
+            "assumptions": ASSUMPTIONS,
+            "personas": [p.model_dump() for p in personas.values()],
+        }
+
+    @app.get("/api/scenarios")
+    def list_scenarios() -> list[dict]:
+        return [
+            {
+                "id": s.id, "folder": s.folder, "name": s.name, "seeded_condition": s.seeded_condition,
+                "organizer_expected_outcome": s.organizer_expected_outcome,
+                "request_id": s.request.get("request_id"), "customer_name": s.request.get("customer_name"),
+                "implemented_by": s.change.get("implemented_by"), "expected_overall": s.expected.get("overall"),
+            }
+            for s in scenarios().values()
+        ]
+
+    @app.get("/api/scenarios/{scenario_id}")
+    def get_scenario(scenario_id: str) -> Any:
+        s = scenarios().get(scenario_id)
+        if not s:
+            return _error(404, "SCENARIO_NOT_FOUND", f"No scenario {scenario_id}")
+        return {"id": s.id, "name": s.name, "seeded_condition": s.seeded_condition, "data_note": s.data_note,
+                "organizer_expected_outcome": s.organizer_expected_outcome,
+                "request": s.request, "implemented_change": s.change, "expected": s.expected}
+
+    @app.get("/api/config")
+    def get_config() -> dict:
+        cfg = current_config()
+        rs = cfg.ruleset
+        return {
+            "file": cfg.path.name,
+            "sha256": cfg.sha256,
+            "short_hash": cfg.short_hash,
+            "loaded_at": cfg.loaded_at.isoformat(),
+            "ruleset": rs.ruleset.model_dump(),
+            "fields": {k: v.model_dump() for k, v in rs.fields.items()},
+            "rules": [r.model_dump() for r in rs.rules],
+            "raw_yaml": cfg.raw_text,
+        }
+
+    # ------------------------------------------------------------- validation
+
+    @app.post("/api/runs")
+    def run_validation(body: RunRequest, x_persona_id: str | None = Header(default=None)) -> Any:
+        actor = personas.get(x_persona_id or "")
+        if body.scenario_id:
+            s = scenarios().get(body.scenario_id)
+            if not s:
+                return _error(404, "SCENARIO_NOT_FOUND", f"No scenario {body.scenario_id}")
+            request_data, change_data, scenario_id, document = s.request, s.change, s.id, s.document_text
+        else:
+            request_data, change_data, scenario_id = body.request, body.implemented_change, None
+            document = body.document_text
+
+        cfg = current_config()
+        pipe = run_pipeline(request_data, change_data, document, cfg, extractor, scenario_id=scenario_id)
+        result, case = pipe.result, pipe.case
+        extras = {"extraction": pipe.extraction.model_dump(mode="json"),
+                  "pipeline": [s.model_dump(mode="json") for s in pipe.steps]}
+        store.save_run(result, case, extras)
+        audit.append(
+            "VALIDATION_RUN_COMPLETED",
+            run_id=result.run_id,
+            actor=actor.id if actor else None,
+            payload={
+                "scenario_id": scenario_id,
+                "request_id": result.request_id,
+                "change_id": result.change_id,
+                "engine_outcome": result.overall.value,
+                "exception_rules": open_exception_rules(result),
+                "config_file": result.config_file,
+                "config_version": result.config_version,
+                "config_sha256": result.config_hash,
+                "input_digest": result.input_digest,
+                "findings_digest": result.findings_digest,
+                "agents": [f"{s.agent}:{s.status}" for s in pipe.steps],
+                "ai_extraction": {"status": pipe.extraction.status, "provider": pipe.extraction.provider,
+                                  "simulated": pipe.extraction.simulated, "cache": pipe.extraction.cache,
+                                  "disagreements": pipe.extraction.disagreements,
+                                  "used_by_rule_engine": False},
+            },
+        )
+        log.info("validation run completed", extra={"run_id": result.run_id, "outcome": result.overall.value,
+                                                   "config_hash": cfg.short_hash})
+        return {"result": result.model_dump(mode="json"), "decision": None, **extras}
+
+    @app.get("/api/runs")
+    def list_runs() -> list[dict]:
+        out = []
+        for r in store.list_runs():
+            d = store.decision(r.run_id)
+            out.append({"run_id": r.run_id, "evaluated_at": r.evaluated_at.isoformat(), "scenario_id": r.scenario_id,
+                        "request_id": r.request_id, "overall": r.overall.value, "config_version": r.config_version,
+                        "config_hash": r.config_hash[:12], "decision": d.decision.value if d else None})
+        return out
+
+    @app.get("/api/runs/{run_id}")
+    def get_run(run_id: str) -> Any:
+        found = store.get(run_id)
+        if not found:
+            return _error(404, "RUN_NOT_FOUND", f"No run {run_id}")
+        result, case = found
+        d = store.decision(run_id)
+        return {"result": result.model_dump(mode="json"), "decision": d.model_dump(mode="json") if d else None,
+                **store.extras(run_id),
+                "inputs": {"request": case.request.model_dump(mode="json"),
+                           "implemented_change": case.change.model_dump(mode="json")}}
+
+    # ------------------------------------------------------------- human decision (approval boundary)
+
+    @app.post("/api/runs/{run_id}/decision")
+    def record_decision(run_id: str, body: DecisionInput, x_persona_id: str | None = Header(default=None)) -> Any:
+        actor = persona(x_persona_id)
+        found = store.get(run_id)
+        if not found:
+            return _error(404, "RUN_NOT_FOUND", f"No run {run_id}")
+        result, _ = found
+        ext_data = store.extras(run_id).get("extraction")
+        extraction = DocumentExtraction.model_validate(ext_data) if ext_data else None
+        try:
+            check_decision_allowed(actor, result, body, extraction)
+        except SodViolation as exc:
+            audit.append("DECISION_BLOCKED", run_id=run_id, actor=actor.id,
+                         payload={"code": exc.code, "attempted_decision": body.decision.value, "message": exc.message})
+            log.warning("decision blocked", extra={"run_id": run_id, "actor": actor.id, "event": exc.code})
+            raise
+        record = DecisionRecord(
+            decision_id=f"DEC-{uuid.uuid4().hex[:10].upper()}",
+            run_id=run_id,
+            decision=body.decision,
+            actor_id=actor.id,
+            actor_name=actor.name,
+            actor_role=actor.role,
+            comment=body.comment.strip(),
+            acknowledged_exceptions=body.acknowledge_exceptions and result.exception_count > 0,
+            ai_review_confirmed=bool(body.ai_review_confirmed and extraction and extraction.status == "EXTRACTED"),
+            engine_outcome=result.overall,
+            config_hash=result.config_hash,
+            recorded_at=datetime.now(timezone.utc),
+        )
+        if not store.save_decision(record):
+            return _error(409, "DECISION_ALREADY_RECORDED", "A checker decision is already recorded for this run. "
+                          "Decisions are write-once; re-run validation to create a new item.")
+        audit.append("CHECKER_DECISION_RECORDED", run_id=run_id, actor=actor.id,
+                     payload={"decision": record.decision.value, "engine_outcome": result.overall.value,
+                              "acknowledged_exceptions": record.acknowledged_exceptions,
+                              "ai_review_confirmed": record.ai_review_confirmed, "comment": record.comment})
+        return {"decision": record.model_dump(mode="json")}
+
+    # ------------------------------------------------------------- traceability
+
+    @app.get("/api/audit")
+    def get_audit(run_id: str | None = Query(default=None)) -> list[dict]:
+        return list(reversed(audit.read(run_id)))
+
+    @app.get("/api/runs/{run_id}/evidence")
+    def evidence(run_id: str, format: Literal["json", "md"] = "json") -> Response:
+        found = store.get(run_id)
+        if not found:
+            return _error(404, "RUN_NOT_FOUND", f"No run {run_id}")
+        result, case = found
+        snapshot = configs_dir / f"{result.config_hash}.yaml"
+        pack = build_pack(result, case, store.decision(run_id), audit.read(run_id),
+                          snapshot.read_text(encoding="utf-8") if snapshot.exists() else None, store.extras(run_id))
+        audit.append("EVIDENCE_EXPORTED", run_id=run_id, actor=None, payload={"format": format})
+        filename = f"evidence_{result.request_id}_{run_id}.{format}"
+        headers = {"Content-Disposition": f'attachment; filename="{filename}"'}
+        if format == "md":
+            return PlainTextResponse(render_markdown(pack), media_type="text/markdown", headers=headers)
+        return JSONResponse(pack, headers=headers)
+
+    # ------------------------------------------------------------- AI extraction observability
+
+    @app.get("/api/llm/status")
+    def llm_status() -> dict:
+        return extractor.status()
+
+    @app.get("/api/llm/usage")
+    def llm_usage() -> dict:
+        return extractor.usage()
+
+    @app.post("/api/llm/cache/clear")
+    def llm_cache_clear(x_persona_id: str | None = Header(default=None)) -> dict:
+        removed = extractor.clear_cache()
+        audit.append("LLM_CACHE_CLEARED", run_id=None, actor=x_persona_id, payload={"entries_removed": removed})
+        return {"entries_removed": removed}
+
+    if settings.frontend_dist.is_dir():
+        app.mount("/", StaticFiles(directory=settings.frontend_dist, html=True), name="ui")
+
+    return app
+
+
+app = create_app()

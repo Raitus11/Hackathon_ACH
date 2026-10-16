@@ -1,0 +1,23 @@
+{
+  "request_id": "REQ-2026-10-0003",
+  "customer_id": "CUST-40452",
+  "customer_name": "Blue Mesa Dental Group PLLC",
+  "request_type": "ACCOUNT_MAINTENANCE",
+  "status": "APPROVED",
+  "submitted_by": "CUST-PORTAL-USER-5512",
+  "approved_by": "SUP-2877",
+  "approved_at": "2026-10-14T17:30:00Z",
+  "requested_changes": [
+    {
+      "field": "company_name",
+      "requested_value": "Blue Mesa Dental Group PLLC"
+    },
+    {
+      "field": "contact_email",
+      "requested_value": "billing@bluemesadental.example"
+    }
+  ],
+  "evidence": {
+    "signed_authorization_form": true
+  }
+}

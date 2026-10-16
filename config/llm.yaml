@@ -1,0 +1,57 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# AI-assisted document extraction (stretch goal viii) — provider configuration.
+#
+# The LLM is used by ONE agent only: the Document Extraction Agent, for ONE
+# synthetic document type (customer authorization form). Its output is labelled
+# AI-ASSISTED, carries a confidence per field, must be confirmed by the checker,
+# and NEVER changes the PASS/EXCEPTION result. Deterministic rules decide.
+#
+# ON/OFF SWITCH: set ACH_LLM_MODE in .env (see .env.example):
+#   ACH_LLM_MODE=deterministic -> provider mock (no LLM call)
+#   ACH_LLM_MODE=llm           -> provider openai_compatible (APEX gateway)
+# If ACH_LLM_MODE is unset, `provider:` below is used.
+#
+# provider:
+#   mock               offline, deterministic parser (labelled DETERMINISTIC, no LLM call).
+#                      Token counts are estimated (chars/4); provider prompt
+#                      caching is simulated. Default, so the demo never depends
+#                      on network access.
+#   openai_compatible  POST {base_url}/chat/completions — use for APEX / Copilot
+#                      gateway if it exposes an OpenAI-compatible endpoint.
+#
+# Overrides (process env or .env): ACH_LLM_MODE, ACH_LLM_PROVIDER, ACH_LLM_BASE_URL,
+#   ACH_LLM_MODEL, ACH_LLM_CA_BUNDLE. The API key is ONLY read from the env var
+#   named in api_key_env (process env or .env) — never put secrets in this file.
+# ─────────────────────────────────────────────────────────────────────────────
+
+provider: mock
+
+openai_compatible:
+  base_url: https://apex.example.internal/v1     # placeholder — replace with the APEX endpoint
+  model: gpt-4o                                  # placeholder — model id exposed by APEX
+  api_key_env: APEX_API_KEY                      # env var holding the token
+  auth_header: Authorization                     # header name the gateway expects
+  auth_scheme: Bearer                            # "" to send the raw token
+  extra_headers: {}                              # e.g. { x-apex-app-id: ach-hackathon }
+  timeout_seconds: 30
+  max_retries: 2
+  ca_bundle: null                                # path to corporate CA bundle if TLS inspection is used
+  temperature: 0
+  json_mode: true                                # send response_format: json_object
+
+mock:
+  model: mock-extractor-v1
+
+# Application-level response cache: identical document + prompt version + model
+# returns the stored extraction with ZERO tokens consumed.
+response_cache:
+  enabled: true
+
+prompt_version: extraction-v1
+
+# Illustrative pricing for the cost column (USD per 1M tokens).
+# Replace with the APEX rate card; labelled "illustrative" in the UI.
+pricing_per_million:
+  input: 2.50
+  cached_input: 1.25
+  output: 10.00

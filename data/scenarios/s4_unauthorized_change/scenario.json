@@ -1,0 +1,7 @@
+{
+  "id": "S4",
+  "name": "Unauthorized change",
+  "seeded_condition": "The change report contains a changed field that was not included in the request.",
+  "organizer_expected_outcome": "Unauthorized-change exception.",
+  "data_note": "SYNTHETIC \u2014 pending organizer assets. Fictional customer, fictional values; routing numbers use the invalid 99 prefix so they cannot be real."
+}

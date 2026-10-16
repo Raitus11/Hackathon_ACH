@@ -1,0 +1,7 @@
+{
+  "id": "S2",
+  "name": "Field mismatch",
+  "seeded_condition": "One implemented value differs from the approved request.",
+  "organizer_expected_outcome": "Exception showing expected and actual values.",
+  "data_note": "SYNTHETIC \u2014 pending organizer assets. Fictional customer, fictional values; routing numbers use the invalid 99 prefix so they cannot be real."
+}

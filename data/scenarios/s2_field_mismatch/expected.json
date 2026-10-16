@@ -1,0 +1,11 @@
+{
+  "overall": "EXCEPTION",
+  "exceptions": [
+    {
+      "rule_id": "FLD-002",
+      "field": "daily_debit_limit",
+      "exception_type": "MISMATCH"
+    }
+  ],
+  "config_baseline": "ach_db_next_day.yaml v1.0.0"
+}

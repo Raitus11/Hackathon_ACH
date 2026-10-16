@@ -1,0 +1,17 @@
+{
+  "request_id": "REQ-2026-10-0005",
+  "customer_id": "CUST-40677",
+  "customer_name": "Summit Ridge Outfitters LLC",
+  "request_type": "ACCOUNT_MAINTENANCE",
+  "status": "APPROVED",
+  "submitted_by": "CUST-PORTAL-USER-8820",
+  "approved_by": "SUP-3104",
+  "approved_at": "2026-10-14T19:10:00Z",
+  "requested_changes": [
+    {
+      "field": "daily_debit_limit",
+      "requested_value": "75000.00"
+    }
+  ],
+  "evidence": {}
+}

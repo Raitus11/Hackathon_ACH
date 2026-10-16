@@ -1,0 +1,14 @@
+SYNTHETIC DOCUMENT - HACKATHON PROTOTYPE ONLY - FICTIONAL CUSTOMER AND SIGNER
+ACH CUSTOMER MAINTENANCE AUTHORIZATION FORM
+Document type: CUSTOMER_AUTHORIZATION_FORM
+
+Customer name: Riverbend Logistics Co.
+Customer ID: CUST-40519
+Request reference: REQ-2026-10-0004
+
+The customer authorizes the following changes to its ACH origination profile:
+  Contact email: payables@riverbend-logistics.example
+
+Authorized signer: Sam Whitaker, CFO
+Signature: [SIGNED]
+Date signed: 2026-10-14

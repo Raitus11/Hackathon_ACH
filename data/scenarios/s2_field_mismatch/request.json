@@ -1,0 +1,23 @@
+{
+  "request_id": "REQ-2026-10-0002",
+  "customer_id": "CUST-40388",
+  "customer_name": "Cedar Point Fabrication Inc.",
+  "request_type": "ACCOUNT_MAINTENANCE",
+  "status": "APPROVED",
+  "submitted_by": "CUST-PORTAL-USER-2290",
+  "approved_by": "SUP-3104",
+  "approved_at": "2026-10-14T16:02:00Z",
+  "requested_changes": [
+    {
+      "field": "daily_debit_limit",
+      "requested_value": "250000.00"
+    },
+    {
+      "field": "contact_email",
+      "requested_value": "ap@cedarpoint-fab.example"
+    }
+  ],
+  "evidence": {
+    "signed_authorization_form": true
+  }
+}

@@ -1,0 +1,15 @@
+# Synthetic test personas for the segregation-of-duties demonstration (FAQ Q38).
+# Fictional people. No real identities, credentials or directory integration.
+personas:
+  - id: P-1001
+    name: Priya Nair
+    role: MAKER
+    title: ACH Processor (Maker)
+  - id: P-1002
+    name: Marcus Lee
+    role: MAKER
+    title: ACH Processor (Maker)
+  - id: C-2001
+    name: Dana Whitfield
+    role: CHECKER
+    title: Independent Reviewer (Checker)

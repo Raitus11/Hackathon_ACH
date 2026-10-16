@@ -1,0 +1,9 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+runtime/
+node_modules/
+reports/pytest_junit.xml
+.DS_Store
+.env

@@ -1,0 +1,15 @@
+SYNTHETIC DOCUMENT - HACKATHON PROTOTYPE ONLY - FICTIONAL CUSTOMER AND SIGNER
+ACH CUSTOMER MAINTENANCE AUTHORIZATION FORM
+Document type: CUSTOMER_AUTHORIZATION_FORM
+
+Customer name: Harbor Lane Provisions LLC
+Customer ID: CUST-40211
+Request reference: REQ-2026-10-0001
+
+The customer authorizes the following changes to its ACH origination profile:
+  Settlement routing number: 990000017
+  Settlement account number: 4400187731
+
+Authorized signer: Jordan Okafor, Treasurer
+Signature: [SIGNED]
+Date signed: 2026-10-14

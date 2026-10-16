@@ -1,0 +1,214 @@
+{
+  "generated_at": "2026-10-16T05:51:09+00:00",
+  "label": "SYNTHETIC DATA \u00b7 SIMULATED SYSTEMS \u00b7 PROTOTYPE",
+  "config": {
+    "file": "ach_db_next_day.yaml",
+    "version": "1.0.0",
+    "sha256": "63120d8f387cd329595da18c4775fd465827894aadaf4e1185431f16662a1844"
+  },
+  "summary": {
+    "total": 5,
+    "passed": 5
+  },
+  "scenarios": [
+    {
+      "scenario_id": "S1",
+      "name": "Clean match",
+      "seeded_condition": "Requested and implemented values match.",
+      "organizer_expected_outcome": "Pass summary for checker review.",
+      "expected_overall": "PASS",
+      "actual_overall": "PASS",
+      "expected_exceptions": [],
+      "actual_exceptions": [],
+      "status": "PASS",
+      "request_id": "REQ-2026-10-0001",
+      "change_id": "CHG-2026-10-0001",
+      "input_digest": "4101837dc1072886fd9e48c72af0413117df5d51971a7cc71620505820714125",
+      "findings_digest": "828145b0a8a1f057b1206fb39ce6acbbf81d41d516e15196503da129c809be4a",
+      "exception_details": []
+    },
+    {
+      "scenario_id": "S2",
+      "name": "Field mismatch",
+      "seeded_condition": "One implemented value differs from the approved request.",
+      "organizer_expected_outcome": "Exception showing expected and actual values.",
+      "expected_overall": "EXCEPTION",
+      "actual_overall": "EXCEPTION",
+      "expected_exceptions": [
+        [
+          "FLD-002",
+          "daily_debit_limit",
+          "MISMATCH"
+        ]
+      ],
+      "actual_exceptions": [
+        [
+          "FLD-002",
+          "daily_debit_limit",
+          "MISMATCH"
+        ]
+      ],
+      "status": "PASS",
+      "request_id": "REQ-2026-10-0002",
+      "change_id": "CHG-2026-10-0002",
+      "input_digest": "500d180228f76b197592fab17a41848f9837a1eb26840db3df622d6f7020554a",
+      "findings_digest": "d0f797f114b2f415dee0098cc8113eac3a0ce3435651be3679649779d4652e0a",
+      "exception_details": [
+        {
+          "field": "Daily debit limit (USD)",
+          "expected": "250000.00",
+          "actual": "2500000.00",
+          "rule": "FLD-002 v1",
+          "reason": "Daily debit limit (USD) was implemented as 2500000.00 but the approved request specifies 250000.00 (TNAL-000201, changed by P-1001)."
+        }
+      ]
+    },
+    {
+      "scenario_id": "S3",
+      "name": "Missing field",
+      "seeded_condition": "A required implemented value is blank or absent.",
+      "organizer_expected_outcome": "Missing-field exception.",
+      "expected_overall": "EXCEPTION",
+      "actual_overall": "EXCEPTION",
+      "expected_exceptions": [
+        [
+          "FLD-001",
+          "contact_email",
+          "MISSING_FIELD"
+        ]
+      ],
+      "actual_exceptions": [
+        [
+          "FLD-001",
+          "contact_email",
+          "MISSING_FIELD"
+        ]
+      ],
+      "status": "PASS",
+      "request_id": "REQ-2026-10-0003",
+      "change_id": "CHG-2026-10-0003",
+      "input_digest": "75b2cc8bce4bddb89151b8ff24ee5b4e6eb03e4c7080470a5df09517a543b8bc",
+      "findings_digest": "d81c4988048ecc647a0d1950a24fdce84603df8c0ae2af3ad417d831ad543284",
+      "exception_details": [
+        {
+          "field": "Contact email",
+          "expected": "billing@bluemesadental.example",
+          "actual": "<blank>",
+          "rule": "FLD-001 v1",
+          "reason": "Contact email was requested as billing@bluemesadental.example but the implemented value is <blank> (TNAL-000302). The requested change is not complete."
+        }
+      ]
+    },
+    {
+      "scenario_id": "S4",
+      "name": "Unauthorized change",
+      "seeded_condition": "The change report contains a changed field that was not included in the request.",
+      "organizer_expected_outcome": "Unauthorized-change exception.",
+      "expected_overall": "EXCEPTION",
+      "actual_overall": "EXCEPTION",
+      "expected_exceptions": [
+        [
+          "AUT-001",
+          "allowed_sec_codes",
+          "UNAUTHORIZED_CHANGE"
+        ]
+      ],
+      "actual_exceptions": [
+        [
+          "AUT-001",
+          "allowed_sec_codes",
+          "UNAUTHORIZED_CHANGE"
+        ]
+      ],
+      "status": "PASS",
+      "request_id": "REQ-2026-10-0004",
+      "change_id": "CHG-2026-10-0004",
+      "input_digest": "772554dcd852f518fccd09cdf90fbec3bbc6e65936287b9cdf917086b23fba40",
+      "findings_digest": "ce4fd3532237376e52cb2386ffe11621403c7d409118a9b68b1e66155243281b",
+      "exception_details": [
+        {
+          "field": "Allowed SEC codes",
+          "expected": "CCD",
+          "actual": "CCD,PPD,WEB",
+          "rule": "AUT-001 v1",
+          "reason": "Allowed SEC codes changed from CCD to CCD,PPD,WEB (TNAL-000402, by P-1001) but was not part of request REQ-2026-10-0004."
+        }
+      ]
+    },
+    {
+      "scenario_id": "S5",
+      "name": "Missing evidence indicator",
+      "seeded_condition": "A required evidence indicator is absent.",
+      "organizer_expected_outcome": "Evidence exception requiring checker investigation.",
+      "expected_overall": "EXCEPTION",
+      "actual_overall": "EXCEPTION",
+      "expected_exceptions": [
+        [
+          "EVD-001",
+          "evidence.signed_authorization_form",
+          "MISSING_EVIDENCE"
+        ]
+      ],
+      "actual_exceptions": [
+        [
+          "EVD-001",
+          "evidence.signed_authorization_form",
+          "MISSING_EVIDENCE"
+        ]
+      ],
+      "status": "PASS",
+      "request_id": "REQ-2026-10-0005",
+      "change_id": "CHG-2026-10-0005",
+      "input_digest": "c2cc664d35475a886dcc0dc6c2ece43bec011342c860e886fdb2bc190bcd9984",
+      "findings_digest": "2fccbe7a7fe1d6044ccc95c4d6f4c4e0b5320fe49bd166845badc818001473de",
+      "exception_details": [
+        {
+          "field": "Signed authorization form",
+          "expected": "present",
+          "actual": "absent",
+          "rule": "EVD-001 v1",
+          "reason": "Required evidence 'Signed authorization form' is absent for ACCOUNT_MAINTENANCE request REQ-2026-10-0005. Checker investigation required."
+        }
+      ]
+    }
+  ],
+  "ac4_comparison": [
+    {
+      "scenario_id": "S1",
+      "v1_0_0": "PASS",
+      "v1_1_0": "EXCEPTION",
+      "changed": true,
+      "new_rules": [
+        "EVD-002"
+      ]
+    },
+    {
+      "scenario_id": "S2",
+      "v1_0_0": "EXCEPTION",
+      "v1_1_0": "EXCEPTION",
+      "changed": false,
+      "new_rules": []
+    },
+    {
+      "scenario_id": "S3",
+      "v1_0_0": "EXCEPTION",
+      "v1_1_0": "EXCEPTION",
+      "changed": false,
+      "new_rules": []
+    },
+    {
+      "scenario_id": "S4",
+      "v1_0_0": "EXCEPTION",
+      "v1_1_0": "EXCEPTION",
+      "changed": false,
+      "new_rules": []
+    },
+    {
+      "scenario_id": "S5",
+      "v1_0_0": "EXCEPTION",
+      "v1_1_0": "EXCEPTION",
+      "changed": false,
+      "new_rules": []
+    }
+  ]
+}

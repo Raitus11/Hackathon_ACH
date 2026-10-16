@@ -1,0 +1,7 @@
+{
+  "id": "S3",
+  "name": "Missing field",
+  "seeded_condition": "A required implemented value is blank or absent.",
+  "organizer_expected_outcome": "Missing-field exception.",
+  "data_note": "SYNTHETIC \u2014 pending organizer assets. Fictional customer, fictional values; routing numbers use the invalid 99 prefix so they cannot be real."
+}

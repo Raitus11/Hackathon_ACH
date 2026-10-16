@@ -1,0 +1,15 @@
+SYNTHETIC DOCUMENT - HACKATHON PROTOTYPE ONLY - FICTIONAL CUSTOMER AND SIGNER
+ACH CUSTOMER MAINTENANCE AUTHORIZATION FORM
+Document type: CUSTOMER_AUTHORIZATION_FORM
+
+Customer name: Blue Mesa Dental Group PLLC
+Customer ID: CUST-40452
+Request reference: REQ-2026-10-0003
+
+The customer authorizes the following changes to its ACH origination profile:
+  Company name: Blue Mesa Dental Group PLLC
+  Contact email: billing@bluemesadental.example
+
+Authorized signer: Dr. Priyanka Rao, Managing Partner
+Signature: [SIGNED]
+Date signed: 2026-10-14

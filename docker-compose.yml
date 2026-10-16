@@ -1,0 +1,9 @@
+services:
+  workbench:
+    build: .
+    image: ach-maker-checker-workbench:local
+    ports:
+      - "8000:8000"
+    volumes:
+      # Mounted read-only so the AC4 demo edit is made on the host file, not in the image.
+      - ./config:/app/config:ro

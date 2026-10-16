@@ -1,0 +1,11 @@
+{
+  "overall": "EXCEPTION",
+  "exceptions": [
+    {
+      "rule_id": "EVD-001",
+      "field": "evidence.signed_authorization_form",
+      "exception_type": "MISSING_EVIDENCE"
+    }
+  ],
+  "config_baseline": "ach_db_next_day.yaml v1.0.0"
+}

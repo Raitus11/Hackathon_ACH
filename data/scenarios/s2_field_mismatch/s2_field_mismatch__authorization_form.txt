@@ -1,0 +1,15 @@
+SYNTHETIC DOCUMENT - HACKATHON PROTOTYPE ONLY - FICTIONAL CUSTOMER AND SIGNER
+ACH CUSTOMER MAINTENANCE AUTHORIZATION FORM
+Document type: CUSTOMER_AUTHORIZATION_FORM
+
+Customer name: Cedar Point Fabrication Inc.
+Customer ID: CUST-40388
+Request reference: REQ-2026-10-0002
+
+The customer authorizes the following changes to its ACH origination profile:
+  Daily debit limit (USD): 250,000.00   (handwritten)
+  Contact email: ap@cedarpoint-fab.example
+
+Authorized signer: Rosa Lindqvist, Controller
+Signature: [SIGNED]
+Date signed: 2026-10-14

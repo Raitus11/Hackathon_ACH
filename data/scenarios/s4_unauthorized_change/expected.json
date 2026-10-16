@@ -1,0 +1,11 @@
+{
+  "overall": "EXCEPTION",
+  "exceptions": [
+    {
+      "rule_id": "AUT-001",
+      "field": "allowed_sec_codes",
+      "exception_type": "UNAUTHORIZED_CHANGE"
+    }
+  ],
+  "config_baseline": "ach_db_next_day.yaml v1.0.0"
+}

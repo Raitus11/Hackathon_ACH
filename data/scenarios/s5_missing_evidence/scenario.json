@@ -1,0 +1,7 @@
+{
+  "id": "S5",
+  "name": "Missing evidence indicator",
+  "seeded_condition": "A required evidence indicator is absent.",
+  "organizer_expected_outcome": "Evidence exception requiring checker investigation.",
+  "data_note": "SYNTHETIC \u2014 pending organizer assets. Fictional customer, fictional values; routing numbers use the invalid 99 prefix so they cannot be real."
+}

@@ -1,0 +1,24 @@
+{
+  "change_id": "CHG-2026-10-0005",
+  "request_id": "REQ-2026-10-0005",
+  "customer_id": "CUST-40677",
+  "implemented_by": "P-1002",
+  "implemented_at": "2026-10-15T14:30:00Z",
+  "tnal_entries": [
+    {
+      "record_id": "TNAL-000501",
+      "customer_id": "CUST-40677",
+      "field": "daily_debit_limit",
+      "old_value": "50000.00",
+      "new_value": "75000.00",
+      "changed_by": "P-1002",
+      "changed_at": "2026-10-15T14:29:41Z"
+    }
+  ],
+  "gps_changes": [
+    {
+      "field": "daily_debit_limit",
+      "new_value": "75000.00"
+    }
+  ]
+}
