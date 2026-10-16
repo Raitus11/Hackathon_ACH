@@ -1,0 +1,30 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# CSV input-set mapping — team-provided synthetic export (4 files)
+#   customer_maintenance_request.csv   one row per request          -> MaintenanceRequest
+#   customer_request_change.csv        one row per requested field  -> requested_changes
+#   request_document.csv               supporting documents         -> evidence indicators
+#   tnal_audit_event.csv               TNAL critical-field audit    -> ImplementedChange.tnal_entries
+#
+# Mapping only: how source codes become the field keys of the rule configuration.
+# Validation behaviour stays in config/rules/*.yaml. Re-read on every upload.
+# ─────────────────────────────────────────────────────────────────────────────
+
+version: 1
+
+# Rule-config field key  <-  source codes seen in customer_request_change.field_code and
+# tnal_audit_event.canonical_field (compared upper-case, trimmed). A code not listed here is
+# lower-cased and used as-is, and the upload response warns about it.
+# CONFIRM WITH THE TEAM: the codes below were read from truncated spreadsheet columns.
+field_codes:
+  settlement_routing_number: [SETTLEMENT_RT, SETTLEMENT_RT_NUMBER, SETTLEMENT_ROUTING, SETTLEMENT_ROUTING_NUMBER, SETL_RT]
+  statement_delivery_method: [DELIVERY_METHOD, DELIVERY_MTHD, DELIV_METHOD, DELIV_MET]
+  ach_hold_indicator:        [ACH_HOLD_IND, ACH_HOLD_INDICATOR, ACH_HOLD, ACH_HOLIN]
+
+# request_document.csv rows with is_secondary_approval_evidence = 1 set this indicator to true.
+# Any other document row sets  document_<document_type lower-case>  to true.
+secondary_approval_indicator: secondary_approval_evidence
+
+# Column of customer_maintenance_request.csv used as the request type (rules may scope on it,
+# e.g. EVD-001 applies to ACCOUNT_MAINTENANCE only). Request status is passed through as-is;
+# which statuses count as approved is set by rule REQ-001.
+request_type_column: build_type

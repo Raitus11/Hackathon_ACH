@@ -23,6 +23,7 @@ class Settings:
     runtime_dir: Path
     frontend_dist: Path
     env_path: Path = REPO_ROOT / ".env"
+    csv_mapping_path: Path = REPO_ROOT / "config" / "csv_mapping.yaml"
 
     @property
     def audit_path(self) -> Path:
@@ -31,6 +32,10 @@ class Settings:
     @property
     def runs_dir(self) -> Path:
         return self.runtime_dir / "runs"
+
+    @property
+    def batches_dir(self) -> Path:
+        return self.runtime_dir / "batches"
 
 
 def load_settings() -> Settings:
@@ -42,4 +47,5 @@ def load_settings() -> Settings:
         runtime_dir=_path("ACH_RUNTIME_DIR", REPO_ROOT / "runtime"),
         frontend_dist=_path("ACH_FRONTEND_DIST", REPO_ROOT / "frontend" / "dist"),
         env_path=_path("ACH_ENV_FILE", REPO_ROOT / ".env"),
+        csv_mapping_path=_path("ACH_CSV_MAPPING_PATH", REPO_ROOT / "config" / "csv_mapping.yaml"),
     )

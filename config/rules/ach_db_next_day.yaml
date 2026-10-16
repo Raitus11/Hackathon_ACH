@@ -27,11 +27,18 @@ ruleset:
 # normalisation applied before comparison.
 fields:
   company_name:              { label: Company name,              normalize: [trim, casefold] }
-  settlement_routing_number: { label: Settlement routing number, normalize: [digits_only] }
+  settlement_routing_number: { label: Settlement routing number, normalize: [aba_routing] }
   settlement_account_number: { label: Settlement account number, normalize: [digits_only] }
   daily_debit_limit:         { label: Daily debit limit (USD),   normalize: [decimal] }
   allowed_sec_codes:         { label: Allowed SEC codes,         normalize: [sorted_csv] }
   contact_email:             { label: Contact email,             normalize: [trim, casefold] }
+  # Fields carried by the team's CSV input set (TNAL audit export). Source field codes are mapped
+  # to these keys in config/csv_mapping.yaml.
+  statement_delivery_method:
+    label: Delivery method
+    normalize: [trim, upper]
+    codes: { "1": MAIL, "3": EMAIL }   # TNAL stores a code; the request carries the label. CONFIRM WITH THE TEAM.
+  ach_hold_indicator:        { label: ACH hold,                  normalize: [yes_no] }
 
 rules:
   - id: REQ-001
@@ -39,7 +46,7 @@ rules:
     type: request_approved
     description: Maintenance request exists and is approved
     severity: HIGH
-    approved_statuses: [APPROVED]
+    approved_statuses: [APPROVED, COMPLETED]   # COMPLETED = approved and fulfilled (CSV input set)
     reason_template: "Request {request_id} has status {actual}; only {expected} requests may be implemented."
     match_template: "Request {request_id} is {actual}."
 
@@ -101,4 +108,16 @@ rules:
     required_when:
       fields_changed_any: [settlement_routing_number, settlement_account_number]
     reason_template: "Settlement account details changed but '{indicator_label}' is {actual} on request {request_id}. Checker investigation required."
+    match_template: "{indicator_label} is on file."
+
+  - id: EVD-003
+    version: 1
+    type: evidence_present
+    description: Secondary-approval evidence on file when the request flags a change as needing it
+    severity: HIGH
+    indicator: secondary_approval_evidence
+    indicator_label: Secondary-approval evidence
+    required_when:
+      request_flagged: true
+    reason_template: "Request {request_id} flags one or more changes as needing supporting evidence, but '{indicator_label}' is {actual}. Checker investigation required."
     match_template: "{indicator_label} is on file."

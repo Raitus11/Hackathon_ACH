@@ -63,7 +63,7 @@ export function SideBySide({ inputs, result }: { inputs: Inputs; result: Validat
                     : <span className="val placeholder">no TNAL row</span>}
                 </td>
                 <td className={has(f, "SOURCE_INCONSISTENT") ? "cell-flag" : ""}>
-                  {gps.has(f) ? <span className="val">{shown(gps.get(f))}</span> : <span className="small muted">not on report</span>}
+                  {gps.has(f) ? <span className="val">{shown(gps.get(f))}</span> : <span className="small muted">{change.gps_report_available === false ? "no GPS report" : "not on report"}</span>}
                 </td>
                 <td>
                   {bad

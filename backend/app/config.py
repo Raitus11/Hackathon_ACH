@@ -20,7 +20,7 @@ from .models import StrictModel
 
 MAX_CONFIG_BYTES = 256 * 1024
 
-Normalizer = Literal["trim", "casefold", "upper", "digits_only", "decimal", "sorted_csv"]
+Normalizer = Literal["trim", "casefold", "upper", "digits_only", "decimal", "sorted_csv", "aba_routing", "yes_no"]
 
 # Placeholders a reason template may use. Anything else is rejected at load time, which also
 # blocks attribute/index access tricks such as "{field.__class__}".
@@ -53,6 +53,16 @@ class ConfigError(Exception):
 class FieldDef(StrictModel):
     label: str = Field(min_length=1, max_length=80)
     normalize: list[Normalizer] = Field(default_factory=lambda: ["trim"])
+    # Optional code table for systems that store a code where the request carries a label
+    # (e.g. TNAL delivery method 3 = EMAIL). Applied before the normalize steps.
+    codes: dict[str, str] = Field(default_factory=dict)
+
+    @field_validator("codes", mode="before")
+    @classmethod
+    def _codes_as_strings(cls, value: object) -> object:
+        if isinstance(value, dict):
+            return {str(k).strip(): str(v).strip() for k, v in value.items()}
+        return value
 
 
 def _check_template(value: str) -> str:
@@ -115,11 +125,16 @@ class RequiredWhen(StrictModel):
     always: bool = False
     request_types: list[str] = Field(default_factory=list)
     fields_changed_any: list[str] = Field(default_factory=list)
+    # Required when the request itself flags one or more lines as needing supporting evidence
+    # (CSV input set: supporting_document_required / secondary_approval_required).
+    request_flagged: bool = False
 
     @model_validator(mode="after")
     def _non_empty(self) -> "RequiredWhen":
-        if not (self.always or self.request_types or self.fields_changed_any):
-            raise ValueError("required_when needs always: true, request_types or fields_changed_any")
+        if not (self.always or self.request_types or self.fields_changed_any or self.request_flagged):
+            raise ValueError(
+                "required_when needs always: true, request_types, fields_changed_any or request_flagged: true"
+            )
         return self
 
 
@@ -180,6 +195,10 @@ class RuleSet(StrictModel):
     def normalizers(self, field: str) -> list[str]:
         definition = self.fields.get(field)
         return list(definition.normalize) if definition else ["trim"]
+
+    def codes(self, field: str) -> dict[str, str]:
+        definition = self.fields.get(field)
+        return dict(definition.codes) if definition else {}
 
 
 @dataclass(frozen=True)

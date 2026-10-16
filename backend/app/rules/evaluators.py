@@ -67,7 +67,7 @@ class Context:
         return f"TNAL {rec} (SIMULATED)"
 
     def norm(self, fld: str, value: str | None) -> str | None:
-        return normalize(value, self.ruleset.normalizers(fld))
+        return normalize(value, self.ruleset.normalizers(fld), self.ruleset.codes(fld))
 
     def scope(self, applies_to: object) -> list[str]:
         if applies_to == "requested_fields":
@@ -210,6 +210,8 @@ def _authorized_scope(rule: AuthorizedScopeRule, ctx: Context) -> EvalOutput:
 
 
 def _source_consistency(rule: SourceConsistencyRule, ctx: Context) -> EvalOutput:
+    if not ctx.case.change.gps_report_available:
+        return EvalOutput(status="NOT_APPLICABLE")
     out = EvalOutput()
     fields = sorted(set(ctx.case.implemented) | set(ctx.case.gps))
     problems: list[Draft] = []
@@ -263,6 +265,7 @@ def _evidence_present(rule: EvidencePresentRule, ctx: Context) -> EvalOutput:
         when.always
         or ctx.case.request.request_type in when.request_types
         or bool(touched & set(when.fields_changed_any))
+        or (when.request_flagged and bool(ctx.case.request.evidence_required_for))
     )
     if not applies:
         return EvalOutput(status="NOT_APPLICABLE")

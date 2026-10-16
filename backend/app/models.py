@@ -48,6 +48,8 @@ class MaintenanceRequest(StrictModel):
     approved_at: datetime | None = None
     requested_changes: list[RequestedChange] = Field(min_length=1, max_length=50)
     evidence: dict[str, bool] = Field(default_factory=dict)
+    # Fields whose request lines are flagged as needing supporting / secondary-approval evidence.
+    evidence_required_for: list[str] = Field(default_factory=list, max_length=50)
     source_system: str = "ServiceNow / Fulfillment Platform (SIMULATED)"
     data_classification: Literal["SYNTHETIC"] = SYNTHETIC
 
@@ -91,6 +93,9 @@ class ImplementedChange(StrictModel):
     implemented_at: datetime
     tnal_entries: list[TnalEntry] = Field(max_length=200)
     gps_changes: list[GpsChange] = Field(default_factory=list, max_length=200)
+    # False when the input set has no GPS change report at all (e.g. the TNAL CSV export).
+    # The GPS consistency rule is then NOT_APPLICABLE instead of flagging every field.
+    gps_report_available: bool = True
     source_systems: list[str] = Field(
         default_factory=lambda: [
             "TNAL Critical Field Audit Log (SIMULATED)",

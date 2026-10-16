@@ -1,0 +1,6 @@
+request_id,customer_id,product_type,build_type,relationship_type,processing_type,request_status,requestor_id,requestor_name,approver_id,scenario_key,scenario_title,scenario_description,submitted_at,created_at,updated_at
+REQ-1001,CUST-9001,DDA,MAINTENANCE,STANDARD,ACH,COMPLETED,NAC101,Alex Rivera,NAC900,clean-match,Clean match,All requested fields implemented,2026-01-05T09:00:00Z,2026-01-05T09:00:00Z,2026-01-05T09:05:00Z
+REQ-1002,CUST-9002,DDA,MAINTENANCE,STANDARD,ACH,COMPLETED,NAC120,Jordan Lee,NAC901,field-mismatch,Field mismatch,Settlement routing implemented with wrong value,2026-01-06T09:00:00Z,2026-01-06T09:00:00Z,2026-01-06T09:05:00Z
+REQ-1003,CUST-9003,DDA,MAINTENANCE,STANDARD,ACH,COMPLETED,NAC130,Priya Nair,NAC902,missing-implementation,Missing implementation,A requested field was never implemented,2026-01-07T09:00:00Z,2026-01-07T09:00:00Z,2026-01-07T09:05:00Z
+REQ-1004,CUST-9004,DDA,MAINTENANCE,STANDARD,ACH,COMPLETED,NAC140,Morgan Diaz,NAC903,unauthorized-implementation,Unauthorized implementation,A TNAL change has no request line,2026-01-08T09:00:00Z,2026-01-08T09:00:00Z,2026-01-08T09:05:00Z
+REQ-1005,CUST-9005,DDA,MAINTENANCE,STANDARD,ACH,COMPLETED,NAC150,Taylor Brooks,NAC904,missing-evidence,Missing evidence,A field requiring evidence has no document,2026-01-09T09:00:00Z,2026-01-09T09:00:00Z,2026-01-09T09:05:00Z

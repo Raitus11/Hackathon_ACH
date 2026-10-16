@@ -7,6 +7,7 @@ import type {
   QueueItem,
   SuitePayload,
   ConfigPayload,
+  CsvBatch,
   DecisionRecord,
   DecisionType,
   Inputs,
@@ -51,6 +52,9 @@ export const api = {
       { method: "POST", body: JSON.stringify({ request, implemented_change: change, document_text: documentText }) },
       personaId,
     ),
+  run: (runId: string) => call<RunPayload>(`/runs/${encodeURIComponent(runId)}`),
+  runCsvBatch: (files: { name: string; content: string }[], personaId: string) =>
+    call<CsvBatch>("/csv/batches", { method: "POST", body: JSON.stringify({ files }) }, personaId),
   decide: (runId: string, personaId: string, decision: DecisionType, comment: string, acknowledge: boolean, aiReviewed: boolean) =>
     call<{ decision: DecisionRecord; routed: QueueItem | null }>(
       `/runs/${encodeURIComponent(runId)}/decision`,

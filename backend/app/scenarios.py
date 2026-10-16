@@ -33,7 +33,8 @@ def load_scenarios(directory: Path) -> list[Scenario]:
     scenarios: list[Scenario] = []
     for folder in sorted(p for p in directory.iterdir() if p.is_dir()):
         meta = _read(folder / "scenario.json")
-        form = folder / "authorization_form.txt"
+        # Accept the canonical name and the "<folder>__authorization_form.txt" form some downloads produce.
+        form = next(iter(sorted(folder.glob("*authorization_form.txt"))), folder / "authorization_form.txt")
         scenarios.append(
             Scenario(
                 id=meta["id"],

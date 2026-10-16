@@ -47,6 +47,7 @@ export interface MaintenanceRequest {
   approved_at?: string | null;
   requested_changes: RequestedChange[];
   evidence: Record<string, boolean>;
+  evidence_required_for?: string[];
   source_system?: string;
 }
 
@@ -68,6 +69,7 @@ export interface ImplementedChange {
   implemented_at: string;
   tnal_entries: TnalEntry[];
   gps_changes: { field: string; new_value: string | null }[];
+  gps_report_available?: boolean;
 }
 
 export interface Inputs {
@@ -148,6 +150,34 @@ export interface RunPayload {
   decision: DecisionRecord | null;
   extraction?: DocumentExtraction;
   pipeline?: AgentStep[];
+  inputs?: Inputs;
+  source?: { kind: "CSV_BATCH"; batch_id: string; request_id: string } | null;
+}
+
+export interface CsvBatchItem {
+  request_id: string;
+  scenario_key: string;
+  scenario_title: string;
+  customer_name?: string;
+  run_id: string | null;
+  overall: Outcome | null;
+  exception_count: number;
+  exceptions: { rule_id: string; field: string; field_label: string; exception_type: string | null; reason: string }[];
+  error: ApiErrorBody | null;
+}
+
+export interface CsvBatch {
+  batch_id: string;
+  created_at: string;
+  files: Record<string, { name: string; sha256: string; rows: number }>;
+  mapping_file: string;
+  mapping_sha256: string;
+  config_file: string;
+  config_version: string;
+  config_sha256: string;
+  summary: { requests: number; pass: number; exception: number; rejected: number; exceptions_by_rule: Record<string, number> };
+  warnings: string[];
+  items: CsvBatchItem[];
 }
 
 export interface RuleConfig {

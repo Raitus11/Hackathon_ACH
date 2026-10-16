@@ -33,6 +33,11 @@ export function InputsPanel({ inputs, result, note }: { inputs: Inputs; result: 
             </tbody>
           </table>
           <div className="small muted" style={{ marginTop: 10 }}>Evidence indicators <SimTag>DMS · SIMULATED</SimTag></div>
+          {(request.evidence_required_for ?? []).length > 0 && (
+            <div className="small muted" style={{ marginTop: 4 }}>
+              Request flags evidence as needed for <span className="mono">{request.evidence_required_for!.join(", ")}</span>
+            </div>
+          )}
           <div className="ev">
             {Object.keys(request.evidence).length === 0 && <span className="chip chip-exception">none on file</span>}
             {Object.entries(request.evidence ?? {}).map(([k, v]) => (
@@ -62,10 +67,16 @@ export function InputsPanel({ inputs, result, note }: { inputs: Inputs; result: 
               ))}
             </tbody>
           </table>
+          {change.gps_report_available === false ? (
+            <div className="small muted" style={{ marginTop: 10 }}>
+              No GPS change report in this input set; the GPS consistency rule is not applicable.
+            </div>
+          ) : (
           <div className="small muted" style={{ marginTop: 10 }}>
             GPS change report lists {change.gps_changes.length} field{change.gps_changes.length === 1 ? "" : "s"}: {" "}
             <span className="mono">{(change.gps_changes ?? []).map((g) => g.field).join(", ") || "none"}</span>
           </div>
+          )}
         </section>
       </div>
       {note && <div className="footer-note" style={{ paddingTop: 8 }}>{note}</div>}

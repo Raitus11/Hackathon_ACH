@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import json
 import logging
+import re
 import uuid
 from datetime import datetime, timezone
 from typing import Any, Literal
@@ -16,7 +18,8 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from . import __version__
 from .audit import AuditLog
 from .config import ConfigError, LoadedConfig, load_ruleset
-from .agents import run_pipeline
+from .agents import PipelineRun, run_pipeline
+from .csv_ingest import CsvBatchInput, build_batch, load_mapping, schema_description
 from .evidence import build_pack, render_markdown
 from .exqueue import SIMULATION_LABEL, ExceptionQueue
 from .replay import compare, describe, list_config_options, resolve
@@ -90,6 +93,21 @@ class CompareRequest(BaseModel):
         if bool(self.scenario_id) == has_files:
             raise ValueError("provide either scenario_id, or both request and implemented_change")
         return self
+
+
+class CsvFile(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    name: str = Field(min_length=1, max_length=200)
+    content: str = Field(max_length=5 * 1024 * 1024)
+
+
+class CsvBatchRequest(BaseModel):
+    """The team's CSV input set, sent as text (the browser reads the files; no multipart needed)."""
+    model_config = ConfigDict(extra="forbid")
+    files: list[CsvFile] = Field(min_length=1, max_length=8)
+
+
+_BATCH_ID = re.compile(r"^BATCH-[0-9A-F]{12}$")
 
 
 def _error(status: int, code: str, message: str, details: list | None = None) -> JSONResponse:
@@ -303,16 +321,25 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
         cfg = current_config()
         pipe = run_pipeline(request_data, change_data, document, cfg, extractor, scenario_id=scenario_id)
+        extras = complete_run(pipe, cfg, actor.id if actor else None, scenario_id)
+        return {"result": pipe.result.model_dump(mode="json"), "decision": None, **extras}
+
+    def complete_run(pipe: PipelineRun, cfg: LoadedConfig, actor_id: str | None, scenario_id: str | None,
+                     source: dict | None = None) -> dict:
+        """Persist a pipeline run and write its audit event. Shared by single runs and CSV batches."""
         result, case = pipe.result, pipe.case
-        extras = {"extraction": pipe.extraction.model_dump(mode="json"),
-                  "pipeline": [s.model_dump(mode="json") for s in pipe.steps]}
+        extras: dict[str, Any] = {"extraction": pipe.extraction.model_dump(mode="json"),
+                                  "pipeline": [s.model_dump(mode="json") for s in pipe.steps]}
+        if source:
+            extras["source"] = source
         store.save_run(result, case, extras)
         audit.append(
             "VALIDATION_RUN_COMPLETED",
             run_id=result.run_id,
-            actor=actor.id if actor else None,
+            actor=actor_id,
             payload={
                 "scenario_id": scenario_id,
+                "source": source,
                 "request_id": result.request_id,
                 "change_id": result.change_id,
                 "engine_outcome": result.overall.value,
@@ -331,7 +358,107 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         )
         log.info("validation run completed", extra={"run_id": result.run_id, "outcome": result.overall.value,
                                                    "config_hash": cfg.short_hash})
-        return {"result": result.model_dump(mode="json"), "decision": None, **extras}
+        return extras
+
+    # ------------------------------------------------------------- CSV input set (team export, 4 files)
+
+    batches_dir = settings.batches_dir
+    batches_dir.mkdir(parents=True, exist_ok=True)
+
+    @app.get("/api/csv/schema")
+    def csv_schema() -> dict:
+        mapping = load_mapping(settings.csv_mapping_path)
+        by_key: dict[str, list[str]] = {}
+        for code, key in mapping.field_codes.items():
+            by_key.setdefault(key, []).append(code)
+        return {"files": schema_description(), "mapping_file": settings.csv_mapping_path.name,
+                "mapping_sha256": mapping.sha256, "field_codes": by_key}
+
+    @app.post("/api/csv/batches")
+    def csv_batch(body: CsvBatchRequest, x_persona_id: str | None = Header(default=None)) -> Any:
+        actor = personas.get(x_persona_id or "")
+        mapping = load_mapping(settings.csv_mapping_path)  # re-read every upload, like the rule file
+        batch: CsvBatchInput = build_batch([(f.name, f.content.encode("utf-8")) for f in body.files], mapping)
+        cfg = current_config()
+        batch_id = f"BATCH-{uuid.uuid4().hex[:12].upper()}"
+
+        items: list[dict[str, Any]] = []
+        for case in batch.cases:
+            item: dict[str, Any] = {"request_id": case.request_id, "scenario_key": case.scenario_key,
+                                    "scenario_title": case.scenario_title, "run_id": None, "overall": None,
+                                    "exception_count": 0, "exceptions": [], "error": None}
+            source = {"kind": "CSV_BATCH", "batch_id": batch_id, "request_id": case.request_id}
+            try:
+                pipe = run_pipeline(case.request, case.implemented_change, None, cfg, extractor)
+            except IngestError as exc:
+                item["error"] = {"code": exc.code, "message": exc.message, "details": exc.details}
+                audit.append("CSV_REQUEST_REJECTED", run_id=None, actor=actor.id if actor else None,
+                             payload={**source, "code": exc.code, "details": exc.details})
+                items.append(item)
+                continue
+            complete_run(pipe, cfg, actor.id if actor else None, None, source)
+            r = pipe.result
+            item.update({
+                "run_id": r.run_id, "overall": r.overall.value, "exception_count": r.exception_count,
+                "customer_name": r.customer_name,
+                "exceptions": [{"rule_id": f.rule_id, "field": f.field, "field_label": f.field_label,
+                                "exception_type": f.exception_type.value if f.exception_type else None,
+                                "reason": f.reason}
+                               for f in r.findings if f.exception_type is not None],
+            })
+            items.append(item)
+
+        by_rule: dict[str, int] = {}
+        for it in items:
+            for e in it["exceptions"]:
+                by_rule[e["rule_id"]] = by_rule.get(e["rule_id"], 0) + 1
+        summary = {
+            "requests": len(items),
+            "pass": sum(1 for i in items if i["overall"] == "PASS"),
+            "exception": sum(1 for i in items if i["overall"] == "EXCEPTION"),
+            "rejected": sum(1 for i in items if i["error"]),
+            "exceptions_by_rule": dict(sorted(by_rule.items())),
+        }
+        out = {
+            "batch_id": batch_id,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "actor": actor.id if actor else None,
+            "files": batch.files,
+            "mapping_file": settings.csv_mapping_path.name,
+            "mapping_sha256": batch.mapping_sha256,
+            "config_file": cfg.path.name,
+            "config_version": cfg.ruleset.ruleset.version,
+            "config_sha256": cfg.sha256,
+            "summary": summary,
+            "warnings": batch.warnings,
+            "items": items,
+        }
+        (batches_dir / f"{batch_id}.json").write_text(json.dumps(out, indent=2), encoding="utf-8")
+        audit.append("CSV_BATCH_VALIDATED", run_id=None, actor=actor.id if actor else None,
+                     payload={"batch_id": batch_id, "files": batch.files, "mapping_sha256": batch.mapping_sha256,
+                              "config_version": out["config_version"], "config_sha256": cfg.sha256,
+                              "warnings": len(batch.warnings), **summary})
+        log.info("csv batch validated", extra={"run_id": batch_id, "config_hash": cfg.short_hash})
+        return out
+
+    @app.get("/api/csv/batches")
+    def list_batches() -> list[dict]:
+        out = []
+        for p in sorted(batches_dir.glob("BATCH-*.json"), key=lambda p: p.stat().st_mtime, reverse=True)[:50]:
+            try:
+                b = json.loads(p.read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                continue
+            out.append({"batch_id": b["batch_id"], "created_at": b["created_at"], "summary": b["summary"],
+                        "config_version": b["config_version"]})
+        return out
+
+    @app.get("/api/csv/batches/{batch_id}")
+    def get_batch(batch_id: str) -> Any:
+        path = batches_dir / f"{batch_id}.json"
+        if not _BATCH_ID.match(batch_id) or not path.is_file():
+            return _error(404, "BATCH_NOT_FOUND", f"No batch {batch_id}")
+        return json.loads(path.read_text(encoding="utf-8"))
 
     @app.get("/api/runs")
     def list_runs() -> list[dict]:

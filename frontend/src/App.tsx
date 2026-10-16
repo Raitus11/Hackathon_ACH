@@ -11,16 +11,20 @@ import { ScenarioSuite } from "./components/ScenarioSuite";
 import { SideBySide } from "./components/SideBySide";
 import { TokenView } from "./components/TokenView";
 import { AuditView } from "./components/AuditView";
+import { CsvBatchPanel } from "./components/CsvBatchPanel";
 import { DecisionPanel } from "./components/DecisionPanel";
 import { FindingsTable } from "./components/FindingsTable";
 import { InputsPanel } from "./components/InputsPanel";
 import { RulePanel } from "./components/RulePanel";
 import { SummaryCard } from "./components/SummaryCard";
 import { IconPlay, IconShield, OutcomeChip } from "./components/ui";
-import type { AgentStep, ApiErrorBody, ConfigPayload, DecisionRecord, DocumentExtraction, Inputs, Meta, ScenarioSummary, ValidationResult } from "./types";
+import type { AgentStep, ApiErrorBody, ConfigPayload, CsvBatch, CsvBatchItem, DecisionRecord, DocumentExtraction, Inputs, Meta, ScenarioSummary, ValidationResult } from "./types";
 
 type Tab = "review" | "queue" | "suite" | "pipeline" | "tokens" | "audit" | "about";
-type Source = { kind: "scenario"; id: string } | { kind: "files"; name: string };
+type Source =
+  | { kind: "scenario"; id: string }
+  | { kind: "files"; name: string }
+  | { kind: "csv"; batchId: string; requestId: string; title: string };
 
 const asError = (e: unknown): ApiErrorBody =>
   e instanceof ApiError ? e.body : { code: "ERROR", message: e instanceof Error ? e.message : String(e), details: [] };
@@ -101,6 +105,30 @@ export default function App() {
     } finally {
       setBusy(false);
       refreshConfig();
+      setAuditKey((k) => k + 1);
+    }
+  }
+
+  async function openCsvItem(item: CsvBatchItem, batch: CsvBatch) {
+    setSource({ kind: "csv", batchId: batch.batch_id, requestId: item.request_id, title: item.scenario_title });
+    setResult(null); setDecision(null); setExtraction(null); setPipeline(null); setDocText(null); setRunError(null);
+    setNote(`From CSV input set ${batch.batch_id} (${Object.values(batch.files).map((f) => f.name).join(", ")}). ` +
+      "No GPS report is part of this input set, so the GPS consistency rule is not applicable.");
+    if (!item.run_id) {
+      setInputs(null);
+      setRunError(item.error ?? { code: "NOT_RUN", message: `${item.request_id} was not validated.`, details: [] });
+      return;
+    }
+    try {
+      const payload = await api.run(item.run_id);
+      setInputs(payload.inputs ?? null);
+      setResult(payload.result);
+      setDecision(payload.decision);
+      setExtraction(payload.extraction ?? null);
+      setPipeline(payload.pipeline ?? null);
+    } catch (e) {
+      setRunError(asError(e));
+    } finally {
       setAuditKey((k) => k + 1);
     }
   }
@@ -194,6 +222,8 @@ export default function App() {
                 ))}
               </div>
             </div>
+            <CsvBatchPanel personaId={personaId} selectedRunId={source?.kind === "csv" ? result?.run_id ?? null : null}
+              onOpen={openCsvItem} onError={(e) => { setRunError(e); setSource(null); setInputs(null); setResult(null); }} />
             <div className="card">
               <div className="card-h"><h2>Load your own files</h2></div>
               <div className="card-b upload">
@@ -218,10 +248,12 @@ export default function App() {
               <div className="card" style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 16px" }}>
                 <div style={{ flex: 1 }}>
                   <div style={{ fontWeight: 600 }}>
-                    {source.kind === "scenario" ? `${selectedId} · ${scenarios.find((s) => s.id === selectedId)?.name}` : source.name}
+                    {source.kind === "scenario" ? `${selectedId} · ${scenarios.find((s) => s.id === selectedId)?.name}`
+                      : source.kind === "csv" ? `${source.requestId} · CSV input set` : source.name}
                   </div>
                   <div className="small muted">
-                    {source.kind === "scenario" ? scenarios.find((s) => s.id === selectedId)?.seeded_condition : "Ad-hoc files"}
+                    {source.kind === "scenario" ? scenarios.find((s) => s.id === selectedId)?.seeded_condition
+                      : source.kind === "csv" ? `${source.title || "Request"} · ${source.batchId}` : "Ad-hoc files"}
                     {config ? ` · rules ${config.file} v${config.ruleset.version} (${config.short_hash})` : ""}
                   </div>
                 </div>
