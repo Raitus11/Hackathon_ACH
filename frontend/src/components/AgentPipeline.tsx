@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { AgentStep } from "../types";
+import { AgentFlow } from "./AgentFlow";
 import { IconAlert, IconCheck, IconChevron, IconSpark } from "./ui";
 
 const STATUS: Record<AgentStep["status"], { cls: string; label: string }> = {
@@ -57,6 +58,7 @@ export function AgentPipelineView({ steps, runId }: { steps: AgentStep[] | null;
           advisory and is never read by the Rule Engine Agent. <strong>No agent can approve.</strong> The decision belongs to the independent checker.
         </div>
       </div>
+      <AgentFlow steps={steps} runId={runId} />
       <ol className="agent-list">
         {steps.map((s) => {
           const st = STATUS[s.status];

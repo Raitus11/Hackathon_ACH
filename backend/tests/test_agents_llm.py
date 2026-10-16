@@ -202,3 +202,12 @@ def test_llm_mode_without_endpoint_fails_safe(tmp_path, scenarios, monkeypatch):
     svc = ExtractionService(BASELINE_RULES.parents[1] / "llm.yaml", tmp_path / "rt", env_path=env)
     ext = svc.extract(scenarios["S2"].document_text, _s2_request(scenarios), load_ruleset(BASELINE_RULES).ruleset, "RUN-2")
     assert ext.status == "FAILED" and "APEX_API_KEY" in (ext.error or "")
+
+
+def test_every_agent_declares_its_handoff(client):
+    steps = _run(client, "S2")["pipeline"]
+    for s in steps:
+        assert s["consumes"] and s["produces"] and s["hands_to"]
+    ext = next(s for s in steps if s["agent"] == "Document Extraction Agent")
+    assert all("Rule Engine" not in h or "never" in h for h in ext["hands_to"])
+    assert steps[1]["hands_to"] == ["Document Extraction Agent", "Rule Engine Agent"]

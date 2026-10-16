@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ApiError, api } from "./api";
 import { AboutView } from "./components/AboutView";
-import { AgentPipelineView, PipelineStrip } from "./components/AgentPipeline";
+import { AgentFlow } from "./components/AgentFlow";
+import { AgentPipelineView } from "./components/AgentPipeline";
 import { ExtractionCard } from "./components/ExtractionCard";
 import { TokenView } from "./components/TokenView";
 import { AuditView } from "./components/AuditView";
@@ -105,12 +106,14 @@ export default function App() {
     if (!rf || !cf) return;
     setRunError(null); setResult(null); setDecision(null); setExtraction(null); setPipeline(null);
     try {
+      
       const request = JSON.parse(await rf.text());
       const change = JSON.parse(await cf.text());
       const df = docFile.current?.files?.[0];
       setDocText(df ? await df.text() : null);
       setInputs({ request, implemented_change: change });
       setSource({ kind: "files", name: `${rf.name} + ${cf.name}` });
+      setNote(`Loaded from files: ${rf.name}, ${cf.name}. Must be synthetic data.`);
       setNote(`Loaded from files: ${rf.name}, ${cf.name}. Must be synthetic data.`);
     } catch (e) {
       setRunError({ code: "FILE_NOT_JSON", message: `Could not parse file as JSON: ${String(e)}`, details: [] });
@@ -217,7 +220,7 @@ export default function App() {
               </div>
             )}
             {result && <SummaryCard result={result} decision={decision} personas={personas} />}
-            {pipeline && <PipelineStrip steps={pipeline} onOpen={() => setTab("pipeline")} />}
+            {pipeline && result && <AgentFlow steps={pipeline} runId={result.run_id} compact />}
             {result && <FindingsTable key={result.run_id} result={result} />}
             {extraction && <ExtractionCard extraction={extraction} />}
             {inputs && <InputsPanel inputs={inputs} result={result} note={note} />}

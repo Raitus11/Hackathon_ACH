@@ -408,3 +408,45 @@ textarea {
 .tip-row b { margin-left: auto; font-variant-numeric: tabular-nums; }
 .table td.num { text-align: right; font-variant-numeric: tabular-nums; font-family: var(--mono); font-size: 12.5px; }
 @media (max-width: 1500px) { .tiles { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+
+/* ---------------------------------------------------------------- animated agent flow */
+.flow-svg { width: 100%; height: auto; display: block; padding: 4px 12px 0; }
+.flow-svg .lane { font-size: 10.5px; font-weight: 700; letter-spacing: 0.6px; fill: var(--text-3); }
+.flow-svg .lane-ai { fill: var(--ai-ink); }
+.flow-svg .edge { fill: none; stroke: var(--line-strong); stroke-width: 2; transition: stroke 0.3s ease; }
+.flow-svg .edge.on { stroke: var(--text-2); }
+.flow-svg .edge.advisory { stroke-dasharray: 6 5; }
+.flow-svg .edge.advisory.on { stroke: var(--ai-ink); }
+.flow-svg .no-edge { stroke: var(--exc-line); stroke-width: 2; stroke-dasharray: 3 4; }
+.flow-svg .no-edge-label { font-size: 10.5px; fill: var(--exc-ink); font-weight: 600; }
+.flow-svg .packet { fill: var(--brand-gold); stroke: #8a6a00; stroke-width: 1.5; }
+.flow-svg .packet-ai { fill: var(--ai-ink); stroke: #2e1a74; }
+.flow-svg .node .disc { fill: var(--surface); stroke: var(--line-strong); stroke-width: 2; transition: fill 0.3s ease, stroke 0.3s ease; }
+.flow-svg .node .num { font-size: 13px; font-weight: 700; fill: var(--text-3); }
+.flow-svg .node .nlabel { font-size: 12.5px; font-weight: 600; fill: var(--text-2); }
+.flow-svg .node .nsub { font-size: 10.5px; fill: var(--text-3); }
+.flow-svg .node.active .disc { stroke: var(--brand-gold); stroke-width: 3; fill: var(--brand-gold-soft); }
+.flow-svg .node.active .num, .flow-svg .node.active .nlabel { fill: var(--text); }
+.flow-svg .node .halo { fill: none; stroke: var(--brand-gold); stroke-width: 2; opacity: 0.6; animation: halo 0.9s ease-out infinite; }
+@keyframes halo { from { r: 26; opacity: 0.8; } to { r: 38; opacity: 0; } }
+.flow-svg .node.done.ok .disc { fill: var(--pass-bg); stroke: var(--pass-ink); }
+.flow-svg .node.done.bad .disc { fill: var(--exc-bg); stroke: var(--exc-ink); }
+.flow-svg .node.done.warn .disc { fill: var(--inv-bg); stroke: var(--inv-ink); }
+.flow-svg .node.done .num { fill: var(--text); }
+.flow-svg .node.done .nlabel { fill: var(--text); }
+.flow-svg .node.extract.done .disc { stroke-dasharray: 4 3; }
+.flow-svg .node.ai.done .disc { stroke: var(--ai-ink); fill: var(--ai-bg); }
+.flow-svg .node.human .disc { fill: #fff; stroke: var(--brand-gold); stroke-width: 3; }
+.flow-svg .node.human.done .disc, .flow-svg .node.human.active .disc { fill: var(--brand-gold-soft); }
+.hop { padding: 8px 16px 12px; border-top: 1px solid var(--line); min-height: 44px; }
+.hop-line { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 12.5px; }
+.hop-agent { font-weight: 700; background: var(--bg); border: 1px solid var(--line-strong); border-radius: 6px; padding: 2px 8px; }
+.hop-agent.ai { color: var(--ai-ink); background: var(--ai-bg); border-color: var(--ai-line); }
+.hop-io { color: var(--text-2); }
+.hop-io b { font-size: 10.5px; letter-spacing: 0.5px; text-transform: uppercase; color: var(--text-3); margin-right: 4px; }
+.hop-arrow { color: var(--text-3); font-weight: 700; }
+.hop-to { font-weight: 600; }
+.hop-log { margin: 0; padding: 4px 16px 14px 16px; list-style: none; display: grid; gap: 6px; border-top: 1px solid var(--line); }
+.hop-log li { padding-top: 6px; animation: fadein 0.35s ease; }
+@keyframes fadein { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .flow-svg .node .halo, .hop-log li { animation: none; } }

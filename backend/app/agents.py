@@ -109,6 +109,39 @@ def run_pipeline(request_data: Any, change_data: Any, document_text: str | None,
     step("Evidence Agent", "Assemble the traceable evidence pack for export", "DETERMINISTIC", "OK", t.ms,
          "Evidence pack ready. Awaiting the independent checker's decision.", manifest)
 
+    # Handoff contract: what each agent consumed, what it produced, and who receives it.
+    src = "authorization_form.txt" if document_text else "no authorization form on file"
+    ext_out = (f"{len(extraction.fields)} extracted field(s) + confidence, {extraction.disagreements} cross-check difference(s)"
+               if extraction.status == "EXTRACTED" else f"extraction status {extraction.status}")
+    handoffs = {
+        "Intake Agent": (
+            [f"request {request.request_id} (ServiceNow · SIMULATED)", f"change {change.change_id} (TNAL/GPS · SIMULATED)"],
+            ["typed, schema-valid MaintenanceRequest", f"typed ImplementedChange ({len(change.tnal_entries)} TNAL rows)"],
+            ["Matcher Agent"]),
+        "Matcher Agent": (
+            ["typed request + typed change"],
+            [f"canonical MaintenanceCase (matched on {request.request_id} / {request.customer_id})",
+             f"input digest {case.input_digest[:12]}…"],
+            ["Document Extraction Agent", "Rule Engine Agent"]),
+        "Document Extraction Agent": (
+            [src, "request values (for side-by-side cross-check only)"],
+            [ext_out],
+            ["Independent checker (advisory, never the Rule Engine)"]),
+        "Rule Engine Agent": (
+            ["canonical MaintenanceCase", f"{result.config_file} v{result.config_version} · sha256 {result.config_hash[:12]}…"],
+            [f"{len(result.findings)} immutable finding(s)", f"overall {result.overall.value} ({result.exception_count} exception(s))"],
+            ["Explainer Agent"]),
+        "Explainer Agent": (
+            [f"{len(result.findings)} finding(s) + configured reason templates"],
+            [f"{len(result.summary_reasons)} checker-readable reason(s)"],
+            ["Evidence Agent"]),
+        "Evidence Agent": (
+            ["result, inputs, config snapshot"],
+            [f"evidence pack manifest · findings digest {result.findings_digest[:12]}…"],
+            ["Independent checker (human-approval boundary)"]),
+    }
+    steps = [s.model_copy(update={"consumes": tuple(handoffs[s.agent][0]), "produces": tuple(handoffs[s.agent][1]),
+                                  "hands_to": tuple(handoffs[s.agent][2])}) for s in steps]
     return PipelineRun(result=result, case=case, extraction=extraction, steps=tuple(steps))
 
 

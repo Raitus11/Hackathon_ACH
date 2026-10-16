@@ -298,3 +298,6 @@ class AgentStep(FrozenModel):
     duration_ms: float
     summary: str
     output: dict
+    consumes: tuple[str, ...] = ()
+    produces: tuple[str, ...] = ()
+    hands_to: tuple[str, ...] = ()

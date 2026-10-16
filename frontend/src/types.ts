@@ -227,6 +227,9 @@ export interface AgentStep {
   duration_ms: number;
   summary: string;
   output: Record<string, unknown>;
+  consumes: string[];
+  produces: string[];
+  hands_to: string[];
 }
 
 export interface LlmStatus {
